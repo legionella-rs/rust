@@ -1979,6 +1979,7 @@ extern "C" {
         M: &'a Module,
         DisableSimplifyLibCalls: bool,
     );
+    pub fn LLVMRustAddPollyPasses(PM: &PassManager<'a>);
     pub fn LLVMRustRunFunctionPassManager(PM: &PassManager<'a>, M: &'a Module);
     pub fn LLVMRustWriteOutputFile(
         T: &'a TargetMachine,

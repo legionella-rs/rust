@@ -52,6 +52,13 @@ DEFINE_STDCXX_CONVERSION_FUNCTIONS(TargetMachine, LLVMTargetMachineRef)
 DEFINE_STDCXX_CONVERSION_FUNCTIONS(PassManagerBuilder,
                                    LLVMPassManagerBuilderRef)
 
+#if ENABLE_POLLY
+namespace polly {
+void initializePollyPasses(llvm::PassRegistry &Registry);
+void registerPollyPasses(llvm::legacy::PassManagerBase &PM);
+}
+#endif
+
 extern "C" void LLVMInitializePasses() {
   PassRegistry &Registry = *PassRegistry::getPassRegistry();
   initializeCore(Registry);
@@ -64,6 +71,10 @@ extern "C" void LLVMInitializePasses() {
   initializeInstCombine(Registry);
   initializeInstrumentation(Registry);
   initializeTarget(Registry);
+
+#if ENABLE_POLLY
+  polly::initializePollyPasses(Registry);
+#endif
 }
 
 extern "C" void LLVMTimeTraceProfilerInitialize() {
@@ -551,6 +562,12 @@ extern "C" void LLVMRustAddLibraryInfo(LLVMPassManagerRef PMR, LLVMModuleRef M,
   if (DisableSimplifyLibCalls)
     TLII.disableAllFunctions();
   unwrap(PMR)->add(new TargetLibraryInfoWrapperPass(TLII));
+}
+
+extern "C" void LLVMRustAddPollyPasses(LLVMPassManagerRef PMR) {
+#if ENABLE_POLLY
+    polly::registerPollyPasses(*unwrap(PMR));
+#endif
 }
 
 // Unfortunately, the LLVM C API doesn't provide an easy way of iterating over
