@@ -84,6 +84,7 @@ pub struct ModuleConfig {
     pub no_integrated_as: bool,
     pub embed_bitcode: bool,
     pub embed_bitcode_marker: bool,
+    pub polly: bool,
 }
 
 impl ModuleConfig {
@@ -116,7 +117,8 @@ impl ModuleConfig {
             vectorize_loop: false,
             vectorize_slp: false,
             merge_functions: false,
-            inline_threshold: None
+            inline_threshold: None,
+            polly: false,
         }
     }
 
@@ -149,6 +151,8 @@ impl ModuleConfig {
 
         self.vectorize_slp = !sess.opts.cg.no_vectorize_slp &&
                             sess.opts.optimize == config::OptLevel::Aggressive;
+
+        self.polly = sess.opts.debugging_opts.polly;
 
         // Some targets (namely, NVPTX) interact badly with the MergeFunctions
         // pass. This is because MergeFunctions can generate new function calls

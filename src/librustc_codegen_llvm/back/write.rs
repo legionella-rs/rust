@@ -381,8 +381,8 @@ pub(crate) unsafe fn optimize(cgcx: &CodegenContext<LlvmCodegenBackend>,
             // we'll get errors in LLVM.
             let using_thin_buffers = config.bitcode_needed();
             if !config.no_prepopulate_passes {
-                llvm::LLVMRustAddAnalysisPasses(tm, fpm, llmod);
-                llvm::LLVMRustAddAnalysisPasses(tm, mpm, llmod);
+                llvm::LLVMRustAddAnalysisPasses(tm, fpm, llmod, config.polly);
+                llvm::LLVMRustAddAnalysisPasses(tm, mpm, llmod, config.polly);
                 let opt_level = config.opt_level.map(|x| to_llvm_opt_settings(x).0)
                     .unwrap_or(llvm::CodeGenOptLevel::None);
                 let prepare_for_thin_lto = cgcx.lto == Lto::Thin || cgcx.lto == Lto::ThinLocal ||
@@ -478,11 +478,12 @@ pub(crate) unsafe fn codegen(cgcx: &CodegenContext<LlvmCodegenBackend>,
         unsafe fn with_codegen<'ll, F, R>(tm: &'ll llvm::TargetMachine,
                                           llmod: &'ll llvm::Module,
                                           no_builtins: bool,
+                                          polly: bool,
                                           f: F) -> R
             where F: FnOnce(&'ll mut PassManager<'ll>) -> R,
         {
             let cpm = llvm::LLVMCreatePassManager();
-            llvm::LLVMRustAddAnalysisPasses(tm, cpm, llmod);
+            llvm::LLVMRustAddAnalysisPasses(tm, cpm, llmod, polly);
             llvm::LLVMRustAddLibraryInfo(cpm, llmod, no_builtins);
             f(cpm)
         }
@@ -574,7 +575,7 @@ pub(crate) unsafe fn codegen(cgcx: &CodegenContext<LlvmCodegenBackend>,
                     cursor.position() as size_t
                 }
 
-                with_codegen(tm, llmod, config.no_builtins, |cpm| {
+                with_codegen(tm, llmod, config.no_builtins, config.polly, |cpm| {
                     let result =
                         llvm::LLVMRustPrintModule(cpm, llmod, out_c.as_ptr(), demangle_callback);
                     llvm::LLVMDisposePassManager(cpm);
@@ -597,7 +598,8 @@ pub(crate) unsafe fn codegen(cgcx: &CodegenContext<LlvmCodegenBackend>,
                 } else {
                     llmod
                 };
-                with_codegen(tm, llmod, config.no_builtins, |cpm| {
+                with_codegen(tm, llmod, config.no_builtins, config.polly,
+                             |cpm| {
                     write_output_file(diag_handler, tm, cpm, llmod, &path,
                                       llvm::FileType::AssemblyFile)
                 })?;
@@ -605,7 +607,7 @@ pub(crate) unsafe fn codegen(cgcx: &CodegenContext<LlvmCodegenBackend>,
 
             if write_obj {
                 let _timer = cgcx.prof.generic_activity("LLVM_module_codegen_emit_obj");
-                with_codegen(tm, llmod, config.no_builtins, |cpm| {
+                with_codegen(tm, llmod, config.no_builtins, config.polly, |cpm| {
                     write_output_file(diag_handler, tm, cpm, llmod, &obj_out,
                                       llvm::FileType::ObjectFile)
                 })?;
@@ -753,7 +755,8 @@ pub unsafe fn with_llvm_pmb(llmod: &llvm::Module,
         llvm::LLVMPassManagerBuilderSetDisableUnrollLoops(builder, 1);
     }
 
-    llvm::LLVMRustAddBuilderLibraryInfo(builder, llmod, config.no_builtins);
+    llvm::LLVMRustAddBuilderLibraryInfo(builder, llmod, config.no_builtins,
+                                        config.polly);
 
     // Here we match what clang does (kinda). For O0 we only inline
     // always-inline functions (but don't add lifetime intrinsics), at O1 we

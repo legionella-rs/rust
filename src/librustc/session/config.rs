@@ -1452,6 +1452,8 @@ options! {DebuggingOptions, DebuggingSetter, basic_debugging_options,
         "run the self profiler and output the raw event data"),
     self_profile_events: Option<Vec<String>> = (None, parse_opt_comma_list, [UNTRACKED],
         "specifies which kinds of events get recorded by the self profiler"),
+    polly: bool = (false, parse_bool, [UNTRACKED], "Run the Polly polyhedral \
+           model optimization passes."),
     emit_stack_sizes: bool = (false, parse_bool, [UNTRACKED],
         "emits a section containing stack size metadata"),
     plt: Option<bool> = (None, parse_opt_bool, [TRACKED],
