@@ -387,16 +387,22 @@ pub fn check_intrinsic_type(tcx: TyCtxt<'_>, it: &hir::ForeignItem<'_>) {
             }
 
             other => {
-                struct_span_err!(
-                    tcx.sess,
-                    it.span,
-                    E0093,
-                    "unrecognized intrinsic function: `{}`",
-                    other,
-                )
-                .span_label(it.span, "unrecognized intrinsic")
-                .emit();
-                return;
+                if let Some(mirgen) = tcx.custom_intrinsic_mirgen(def_id) {
+                    (mirgen.generic_parameter_count(tcx),
+                     mirgen.inputs(tcx).iter().collect(),
+                     mirgen.output(tcx))
+                } else {
+                    struct_span_err!(
+                        tcx.sess,
+                        it.span,
+                        E0093,
+                        "unrecognized intrinsic function: `{}`",
+                        other,
+                    )
+                        .span_label(it.span, "unrecognized intrinsic")
+                        .emit();
+                    return;
+                }
             }
         };
         (n_tps, inputs, output, unsafety)

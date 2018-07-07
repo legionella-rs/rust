@@ -49,6 +49,7 @@ pub fn provide(providers: &mut Providers) {
     const_eval::provide(providers);
     shim::provide(providers);
     transform::provide(providers);
+    monomorphize::provide(providers);
     monomorphize::partitioning::provide(providers);
     monomorphize::polymorphize::provide(providers);
     providers.const_eval_validated = const_eval::const_eval_validated_provider;

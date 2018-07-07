@@ -218,6 +218,8 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
         };
 
+        let custom = self.tcx.custom_intrinsic_mir(instance);
+
         // ABI check
         {
             let callee_abi = {
@@ -296,6 +298,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                     // The Rust ABI is special: ZST get skipped.
                     let rust_abi = match caller_abi {
                         Abi::Rust | Abi::RustCall => true,
+                        Abi::RustIntrinsic if custom.is_some() => true,
                         _ => false,
                     };
                     // We have two iterators: Where the arguments come from,
