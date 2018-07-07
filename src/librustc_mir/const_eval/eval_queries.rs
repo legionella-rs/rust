@@ -306,7 +306,7 @@ pub fn const_eval_raw_provider<'tcx>(
         MemoryExtra { can_access_statics: is_static },
     );
 
-    let res = ecx.load_mir(cid.instance.def, cid.promoted);
+    let res = ecx.load_mir(cid.instance, cid.promoted);
     res.and_then(|body| eval_body_using_ecx(&mut ecx, cid, &body))
         .and_then(|place| {
             Ok(RawConst { alloc_id: place.ptr.assert_ptr().alloc_id, ty: place.layout.ty })
