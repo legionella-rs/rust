@@ -330,8 +330,13 @@ impl<'mir, 'tcx> interpret::Machine<'mir, 'tcx> for CompileTimeInterpreter<'mir,
         ret: Option<mir::BasicBlock>,
     ) -> InterpResult<'tcx, Option<&'mir mir::Body<'tcx>>> {
         debug!("eval_fn_call: {:?}", instance);
+        // WIP: We assume all custom intrinsics are const. This is okay for now
+        // as these are generated in the provider/query system, which caches the
+        // resulting MIR. Effectively, this means for any specific set of generic
+        // params, the MIR is the same for each call (ie in user code).
+        let custom = ecx.tcx.custom_intrinsic_mir(instance);
         // Only check non-glue functions
-        if let ty::InstanceDef::Item(def_id) = instance.def {
+        if let (None, ty::InstanceDef::Item(def_id)) = (custom, instance.def) {
             // Execution might have wandered off into other crates, so we cannot do a stability-
             // sensitive check here.  But we can at least rule out functions that are not const
             // at all.
@@ -348,7 +353,7 @@ impl<'mir, 'tcx> interpret::Machine<'mir, 'tcx> for CompileTimeInterpreter<'mir,
             }
         }
         // This is a const fn. Call it.
-        Ok(Some(match ecx.load_mir(instance.def, None) {
+        Ok(Some(match ecx.load_mir(instance, None) {
             Ok(body) => body,
             Err(err) => {
                 if let err_unsup!(NoMirFor(ref path)) = err.kind {
@@ -672,7 +677,7 @@ pub fn const_eval_raw_provider<'tcx>(
         Default::default()
     );
 
-    let res = ecx.load_mir(cid.instance.def, cid.promoted);
+    let res = ecx.load_mir(cid.instance, cid.promoted);
     res.and_then(
         |body| eval_body_using_ecx(&mut ecx, cid, body)
     ).and_then(|place| {

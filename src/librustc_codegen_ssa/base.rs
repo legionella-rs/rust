@@ -378,7 +378,7 @@ pub fn codegen_instance<'a, 'tcx: 'a, Bx: BuilderMethods<'a, 'tcx>>(
 
     let lldecl = cx.get_fn(instance);
 
-    let mir = cx.tcx().instance_mir(instance.def);
+    let mir = cx.tcx().instance_mir(instance);
     mir::codegen_mir::<Bx>(cx, lldecl, &mir, instance, sig);
 }
 

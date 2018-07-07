@@ -747,6 +747,10 @@ fn visit_instance_use<'tcx>(
             if !is_direct_call {
                 bug!("intrinsic {:?} being reified", def_id);
             }
+
+            if let Some(_mir) = tcx.custom_intrinsic_mir(instance) {
+                output.push(create_fn_mono_item(instance));
+            }
         }
         ty::InstanceDef::VtableShim(..) |
         ty::InstanceDef::ReifyShim(..) |
@@ -1251,7 +1255,7 @@ fn collect_neighbours<'tcx>(
     output: &mut Vec<MonoItem<'tcx>>,
 ) {
     debug!("collect_neighbours: {:?}", instance.def_id());
-    let body = tcx.instance_mir(instance.def);
+    let body = tcx.instance_mir(instance);
 
     MirNeighborCollector {
         tcx,
