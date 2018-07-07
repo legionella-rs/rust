@@ -54,6 +54,7 @@ pub fn provide(providers: &mut Providers<'_>) {
     borrow_check::provide(providers);
     shim::provide(providers);
     transform::provide(providers);
+    monomorphize::provide(providers);
     monomorphize::partitioning::provide(providers);
     providers.const_eval = const_eval::const_eval_provider;
     providers.const_eval_raw = const_eval::const_eval_raw_provider;

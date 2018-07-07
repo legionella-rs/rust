@@ -129,6 +129,24 @@ rustc_queries! {
             }
         }
 
+        /// If defined by the driver, returns the extra mir statements to codegen,
+        /// else returns `None`.
+        query custom_intrinsic_mirgen(key: DefId) -> Option<Lrc<dyn mir::CustomIntrinsicMirGen>> {
+            anon
+            fatal_cycle
+            no_hash
+
+            desc { |tcx| "asking for the custom MIR generator of `{}`", tcx.def_path_str(key) }
+        }
+        /// The monomorphized MIR for a custom intrinsic instance.
+        query custom_intrinsic_mir(inst: ty::Instance<'tcx>) -> Option<&'tcx mir::Body<'tcx>> {
+            anon
+            fatal_cycle
+            no_force
+
+            desc { |tcx| "asking for the custom MIR of `{}`", tcx.def_path_str(inst.def_id()) }
+        }
+
         query promoted_mir(key: DefId) -> &'tcx IndexVec<mir::Promoted, mir::Body<'tcx>> {
             cache_on_disk_if { key.is_local() }
             load_cached(tcx, id) {
