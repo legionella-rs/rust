@@ -3000,17 +3000,23 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     /// Returns the possibly-auto-generated MIR of a `(DefId, Subst)` pair.
-    pub fn instance_mir(self, instance: ty::InstanceDef<'tcx>) -> ReadOnlyBodyAndCache<'tcx, 'tcx> {
-        match instance {
+    pub fn instance_mir(self, instance: ty::Instance<'tcx>) -> ReadOnlyBodyAndCache<'tcx, 'tcx> {
+        match instance.def {
             ty::InstanceDef::Item(did) => self.optimized_mir(did).unwrap_read_only(),
+            ty::InstanceDef::Intrinsic(..) => {
+                if let Some(mir) = self.custom_intrinsic_mir(instance) {
+                    mir.unwrap_read_only()
+                } else {
+                    self.mir_shims(instance.def).unwrap_read_only()
+                }
+            }
             ty::InstanceDef::VtableShim(..)
             | ty::InstanceDef::ReifyShim(..)
-            | ty::InstanceDef::Intrinsic(..)
             | ty::InstanceDef::FnPtrShim(..)
             | ty::InstanceDef::Virtual(..)
             | ty::InstanceDef::ClosureOnceShim { .. }
             | ty::InstanceDef::DropGlue(..)
-            | ty::InstanceDef::CloneShim(..) => self.mir_shims(instance).unwrap_read_only(),
+            | ty::InstanceDef::CloneShim(..) => self.mir_shims(instance.def).unwrap_read_only(),
         }
     }
 

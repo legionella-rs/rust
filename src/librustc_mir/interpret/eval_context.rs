@@ -351,7 +351,7 @@ impl<'mir, 'tcx, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
     pub fn load_mir(
         &self,
-        instance: ty::InstanceDef<'tcx>,
+        instance: ty::Instance<'tcx>,
         promoted: Option<mir::Promoted>,
     ) -> InterpResult<'tcx, mir::ReadOnlyBodyAndCache<'tcx, 'tcx>> {
         // do not continue if typeck errors occurred (can only occur in local crate)
@@ -366,7 +366,7 @@ impl<'mir, 'tcx, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         if let Some(promoted) = promoted {
             return Ok(self.tcx.promoted_mir(did)[promoted].unwrap_read_only());
         }
-        match instance {
+        match instance.def {
             ty::InstanceDef::Item(def_id) => {
                 if self.tcx.is_mir_available(did) {
                     Ok(self.tcx.optimized_mir(did).unwrap_read_only())
