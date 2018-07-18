@@ -50,7 +50,21 @@ pub fn write_compressed_metadata<'tcx>(
 
     let (metadata_llcx, metadata_llmod) = (&*llvm_module.llcx, llvm_module.llmod());
     let mut compressed = tcx.metadata_encoding_version();
+
+    let len_pos = compressed.len();
+    // Write a length, so that we can still use dylibs downstream. If we don't do this, and
+    // `-Z always-export-metadata` is on, decompression will fail (snappy will always try to
+    // decompress to the end of the buffer).
+    compressed.write_all(&0u64.to_le_bytes()).unwrap();
+    let compressed_start = compressed.len();
+
     FrameEncoder::new(&mut compressed).write_all(&metadata.raw_data).unwrap();
+
+    let compressed_len = (compressed.len() - compressed_start) as u64;
+    if compressed_len != 0 {
+        compressed[len_pos..compressed_start]
+            .copy_from_slice(&compressed_len.to_le_bytes());
+    }
 
     let llmeta = common::bytes_in_context(metadata_llcx, &compressed);
     let llconst = common::struct_in_context(metadata_llcx, &[llmeta], false);
