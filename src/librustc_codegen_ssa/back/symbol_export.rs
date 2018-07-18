@@ -218,7 +218,8 @@ fn exported_symbols_provider_local(
         }));
     }
 
-    if tcx.sess.crate_types.borrow().contains(&config::CrateType::Dylib) {
+    if tcx.sess.crate_types.borrow().contains(&config::CrateType::Dylib) ||
+       tcx.sess.opts.debugging_opts.always_emit_metadata {
         let symbol_name = metadata_symbol_name(tcx);
         let exported_symbol = ExportedSymbol::NoDefId(SymbolName::new(&symbol_name));
 
