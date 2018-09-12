@@ -14,7 +14,7 @@ pub use rustc_middle::ty::layout::{FAT_PTR_ADDR, FAT_PTR_EXTRA};
 use rustc_middle::ty::Ty;
 use rustc_target::abi::call::ArgAbi;
 pub use rustc_target::abi::call::*;
-use rustc_target::abi::{self, HasDataLayout, Int, LayoutOf};
+use rustc_target::abi::{self, Int, LayoutOf};
 pub use rustc_target::spec::abi::Abi;
 
 use libc::c_uint;
@@ -320,10 +320,13 @@ impl<'tcx> FnAbiLlvmExt<'tcx> for FnAbi<'tcx, Ty<'tcx>> {
 
         let llreturn_ty = match self.ret.mode {
             PassMode::Ignore => cx.type_void(),
-            PassMode::Direct(_) | PassMode::Pair(..) => self.ret.layout.immediate_llvm_type(cx),
+            PassMode::Direct(_) | PassMode::Pair(..) => {
+                self.ret.layout.immediate_llvm_type(cx)
+                  .copy_addr_space(cx.flat_addr_space())
+            }
             PassMode::Cast(cast) => cast.llvm_type(cx),
             PassMode::Indirect(..) => {
-                llargument_tys.push(cx.type_ptr_to(self.ret.memory_ty(cx)));
+                llargument_tys.push(cx.type_ptr_to_alloca(self.ret.memory_ty(cx)));
                 cx.type_void()
             }
         };
@@ -336,8 +339,11 @@ impl<'tcx> FnAbiLlvmExt<'tcx> for FnAbi<'tcx, Ty<'tcx>> {
 
             let llarg_ty = match arg.mode {
                 PassMode::Ignore => continue,
-                PassMode::Direct(_) => arg.layout.immediate_llvm_type(cx),
+                PassMode::Direct(_) => arg.layout.immediate_llvm_type(cx)
+                  .copy_addr_space(cx.flat_addr_space()),
                 PassMode::Pair(..) => {
+                    // Keep the argument type address space given by
+                    // `scalar_pair_element_llvm_type`.
                     llargument_tys.push(arg.layout.scalar_pair_element_llvm_type(cx, 0, true));
                     llargument_tys.push(arg.layout.scalar_pair_element_llvm_type(cx, 1, true));
                     continue;
@@ -350,7 +356,7 @@ impl<'tcx> FnAbiLlvmExt<'tcx> for FnAbi<'tcx, Ty<'tcx>> {
                     continue;
                 }
                 PassMode::Cast(cast) => cast.llvm_type(cx),
-                PassMode::Indirect(_, None) => cx.type_ptr_to(arg.memory_ty(cx)),
+                PassMode::Indirect(_, None) => cx.type_ptr_to_alloca(arg.memory_ty(cx)),
             };
             llargument_tys.push(llarg_ty);
         }
@@ -366,7 +372,7 @@ impl<'tcx> FnAbiLlvmExt<'tcx> for FnAbi<'tcx, Ty<'tcx>> {
         unsafe {
             llvm::LLVMPointerType(
                 self.llvm_type(cx),
-                cx.data_layout().instruction_address_space.0 as c_uint,
+                cx.inst_addr_space().0 as c_uint,
             )
         }
     }

@@ -1,11 +1,12 @@
-use super::BackendTypes;
+use super::MiscMethods;
 use crate::mir::place::PlaceRef;
 use rustc_middle::mir::interpret::{Allocation, Scalar};
 use rustc_middle::ty::layout::TyAndLayout;
 use rustc_span::Symbol;
 use rustc_target::abi::{self, Size};
+use rustc_target::spec::AddrSpaceIdx;
 
-pub trait ConstMethods<'tcx>: BackendTypes {
+pub trait ConstMethods<'tcx>: MiscMethods<'tcx> {
     // Constant constructors
     fn const_null(&self, t: Self::Type) -> Self::Value;
     fn const_undef(&self, t: Self::Type) -> Self::Value;
@@ -25,6 +26,11 @@ pub trait ConstMethods<'tcx>: BackendTypes {
 
     fn const_to_opt_uint(&self, v: Self::Value) -> Option<u64>;
     fn const_to_opt_u128(&self, v: Self::Value, sign_ext: bool) -> Option<u128>;
+
+    fn const_as_cast(&self, v: Self::Value, space: AddrSpaceIdx) -> Self::Value;
+    fn const_flat_as_cast(&self, v: Self::Value) -> Self::Value {
+        self.const_as_cast(v, self.flat_addr_space())
+    }
 
     fn scalar_to_backend(&self, cv: Scalar, layout: &abi::Scalar, llty: Self::Type) -> Self::Value;
     fn from_const_alloc(

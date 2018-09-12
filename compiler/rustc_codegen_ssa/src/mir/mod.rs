@@ -325,7 +325,7 @@ fn create_funclets<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                     // it's null. The 64 here is actually a bitfield which
                     // represents that this is a catch-all block.
                     let null = bx.const_null(
-                        bx.type_i8p_ext(bx.cx().data_layout().instruction_address_space),
+                        bx.type_i8p_as(bx.cx().data_layout().instruction_address_space),
                     );
                     let sixty_four = bx.const_i32(64);
                     funclet = cp_bx.catch_pad(cs, &[null, sixty_four, null]);

@@ -24,8 +24,14 @@ impl PreDefineMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         let instance = Instance::mono(self.tcx, def_id);
         let ty = instance.ty(self.tcx, ty::ParamEnv::reveal_all());
         let llty = self.layout_of(ty).llvm_type(self);
+        let freeze = self.type_is_freeze(ty);
+        let addr_space = if self.tcx.is_mutable_static(def_id) || !freeze {
+            self.mutable_addr_space()
+        } else {
+            self.const_addr_space()
+        };
 
-        let g = self.define_global(symbol_name, llty).unwrap_or_else(|| {
+        let g = self.define_global(symbol_name, llty, addr_space).unwrap_or_else(|| {
             self.sess().span_fatal(
                 self.tcx.def_span(def_id),
                 &format!("symbol `{}` is already defined", symbol_name),
