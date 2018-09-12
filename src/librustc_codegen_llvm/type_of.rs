@@ -229,6 +229,12 @@ impl<'tcx> LayoutLlvmExt<'tcx> for TyAndLayout<'tcx> {
     /// with the inner-most trailing unsized field using the "minimal unit"
     /// of that field's type - this is useful for taking the address of
     /// that field and ensuring the struct has the right alignment.
+    ///
+    /// Note: the address space used for ptrs is important. Due to the nested
+    /// nature of these types, we must assume pointers are in the flat space.
+    /// Spaces are overriden as needed (or will be, in a later patch), when it
+    /// is known in which space a memory location will reside.
+    ///
     fn llvm_type<'a>(&self, cx: &CodegenCx<'a, 'tcx>) -> &'a Type {
         if let Abi::Scalar(ref scalar) = self.abi {
             // Use a different cache for scalars because pointers to DSTs
@@ -238,10 +244,10 @@ impl<'tcx> LayoutLlvmExt<'tcx> for TyAndLayout<'tcx> {
             }
             let llty = match self.ty.kind {
                 ty::Ref(_, ty, _) | ty::RawPtr(ty::TypeAndMut { ty, .. }) => {
-                    cx.type_ptr_to(cx.layout_of(ty).llvm_type(cx))
+                    cx.type_ptr_to_flat(cx.layout_of(ty).llvm_type(cx))
                 }
                 ty::Adt(def, _) if def.is_box() => {
-                    cx.type_ptr_to(cx.layout_of(self.ty.boxed_ty()).llvm_type(cx))
+                    cx.type_ptr_to_flat(cx.layout_of(self.ty.boxed_ty()).llvm_type(cx))
                 }
                 ty::FnPtr(sig) => cx.fn_ptr_backend_type(&FnAbi::of_fn_ptr(cx, sig, &[])),
                 _ => self.scalar_llvm_type_at(cx, scalar, Size::ZERO),
@@ -315,7 +321,7 @@ impl<'tcx> LayoutLlvmExt<'tcx> for TyAndLayout<'tcx> {
                 } else {
                     cx.type_i8()
                 };
-                cx.type_ptr_to(pointee)
+                cx.type_ptr_to_flat(pointee)
             }
         }
     }
