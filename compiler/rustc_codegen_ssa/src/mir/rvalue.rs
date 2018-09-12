@@ -17,6 +17,41 @@ use rustc_span::source_map::{Span, DUMMY_SP};
 use rustc_span::symbol::sym;
 use rustc_target::abi::{Abi, Int, LayoutOf, Variants};
 
+fn codegen_binop_fixup<'a, 'tcx, Bx>(bx: &mut Bx,
+                                     lhs: Bx::Value,
+                                     rhs: Bx::Value)
+    -> (Bx::Value, Bx::Value)
+    where Bx: BuilderMethods<'a, 'tcx>,
+{
+    // In case we're in separate addr spaces.
+    // Can happen when cmp against null_mut, eg.
+    // `infer-addr-spaces` should propagate.
+    // But, empirically, `infer-addr-spaces` doesn't.
+    let fix_null_ty = |val, this_ty, other_ty| {
+        if bx.cx().const_null(this_ty) == val {
+            (bx.cx().const_null(other_ty), other_ty)
+        } else {
+            (val, this_ty)
+        }
+    };
+    let lhs_ty = bx.cx().val_ty(lhs);
+    let rhs_ty = bx.cx().val_ty(rhs);
+    let (lhs, lhs_ty) = fix_null_ty(lhs, lhs_ty, rhs_ty);
+    let (rhs, rhs_ty) = fix_null_ty(rhs, rhs_ty, lhs_ty);
+    if let Some(lhs_as) = bx.cx().type_addr_space(lhs_ty) {
+        let rhs_as = bx.cx().type_addr_space(rhs_ty).unwrap();
+        // cast to the flat addr space if they are still different.
+        if lhs_as != rhs_as {
+            (bx.flat_addr_cast(lhs),
+             bx.flat_addr_cast(rhs))
+        } else {
+            (lhs, rhs)
+        }
+    } else {
+        (lhs, rhs)
+    }
+}
+
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     pub fn codegen_rvalue(
         &mut self,
@@ -375,9 +410,14 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                                 }
                             }
                             (CastTy::Ptr(_) | CastTy::FnPtr, CastTy::Ptr(_)) => {
+                                // This is left in it's original address space. This is okay
+                                // because a &mut T -> &T cast wouldn't change the address
+                                // space used to load it.
                                 bx.pointercast(llval, ll_t_out)
                             }
                             (CastTy::Ptr(_) | CastTy::FnPtr, CastTy::Int(_)) => {
+                                // Ensure the ptr is in the flat address space.
+                                // This might not be required, but it is safe.
                                 bx.ptrtoint(llval, ll_t_out)
                             }
                             (CastTy::Int(_), CastTy::Ptr(_)) => {
@@ -677,6 +717,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         rhs_extra: Bx::Value,
         _input_ty: Ty<'tcx>,
     ) -> Bx::Value {
+        let (lhs_addr, rhs_addr) = codegen_binop_fixup(bx, lhs_addr, rhs_addr);
         match op {
             mir::BinOp::Eq => {
                 let lhs = bx.icmp(IntPredicate::IntEQ, lhs_addr, rhs_addr);

@@ -20,6 +20,7 @@ use crate::type_::Type;
 use crate::value::Value;
 use rustc_codegen_ssa::traits::*;
 use rustc_middle::ty::Ty;
+use rustc_target::spec::AddrSpaceIdx;
 use tracing::debug;
 
 /// Declare a function.
@@ -56,9 +57,22 @@ impl CodegenCx<'ll, 'tcx> {
     ///
     /// If there’s a value with the same name already declared, the function will
     /// return its Value instead.
-    pub fn declare_global(&self, name: &str, ty: &'ll Type) -> &'ll Value {
+    pub fn declare_global(
+        &self,
+        name: &str,
+        ty: &'ll Type,
+        addr_space: AddrSpaceIdx,
+    ) -> &'ll Value {
         debug!("declare_global(name={:?})", name);
-        unsafe { llvm::LLVMRustGetOrInsertGlobal(self.llmod, name.as_ptr().cast(), name.len(), ty) }
+        unsafe {
+            llvm::LLVMRustGetOrInsertGlobal(
+                self.llmod,
+                name.as_ptr().cast(),
+                name.len(),
+                ty,
+                addr_space.0,
+            )
+        }
     }
 
     /// Declare a C ABI function.
@@ -90,19 +104,24 @@ impl CodegenCx<'ll, 'tcx> {
     /// return `None` if the name already has a definition associated with it. In that
     /// case an error should be reported to the user, because it usually happens due
     /// to user’s fault (e.g., misuse of `#[no_mangle]` or `#[export_name]` attributes).
-    pub fn define_global(&self, name: &str, ty: &'ll Type) -> Option<&'ll Value> {
+    pub fn define_global(
+        &self,
+        name: &str,
+        ty: &'ll Type,
+        addr_space: AddrSpaceIdx
+    ) -> Option<&'ll Value> {
         if self.get_defined_value(name).is_some() {
             None
         } else {
-            Some(self.declare_global(name, ty))
+            Some(self.declare_global(name, ty, addr_space))
         }
     }
 
     /// Declare a private global
     ///
     /// Use this function when you intend to define a global without a name.
-    pub fn define_private_global(&self, ty: &'ll Type) -> &'ll Value {
-        unsafe { llvm::LLVMRustInsertPrivateGlobal(self.llmod, ty) }
+    pub fn define_private_global(&self, ty: &'ll Type, addr_space: AddrSpaceIdx) -> &'ll Value {
+        unsafe { llvm::LLVMRustInsertPrivateGlobal(self.llmod, ty, addr_space.0) }
     }
 
     /// Gets declared value by name.

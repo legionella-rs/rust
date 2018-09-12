@@ -1,7 +1,7 @@
 pub use Integer::*;
 pub use Primitive::*;
 
-use crate::spec::Target;
+use crate::spec::{Target, AddrSpaceIdx, };
 
 use std::convert::{TryFrom, TryInto};
 use std::num::NonZeroUsize;
@@ -25,6 +25,7 @@ pub struct TargetDataLayout {
     pub i128_align: AbiAndPrefAlign,
     pub f32_align: AbiAndPrefAlign,
     pub f64_align: AbiAndPrefAlign,
+    pub pointers: Vec<Option<(Size, AbiAndPrefAlign)>>,
     pub pointer_size: Size,
     pub pointer_align: AbiAndPrefAlign,
     pub aggregate_align: AbiAndPrefAlign,
@@ -32,7 +33,8 @@ pub struct TargetDataLayout {
     /// Alignments for vector types.
     pub vector_align: Vec<(Size, AbiAndPrefAlign)>,
 
-    pub instruction_address_space: AddressSpace,
+    pub alloca_address_space: AddrSpaceIdx,
+    pub instruction_address_space: AddrSpaceIdx,
 }
 
 impl Default for TargetDataLayout {
@@ -49,14 +51,16 @@ impl Default for TargetDataLayout {
             i128_align: AbiAndPrefAlign { abi: align(32), pref: align(64) },
             f32_align: AbiAndPrefAlign::new(align(32)),
             f64_align: AbiAndPrefAlign::new(align(64)),
+            pointers: vec![],
             pointer_size: Size::from_bits(64),
             pointer_align: AbiAndPrefAlign::new(align(64)),
             aggregate_align: AbiAndPrefAlign { abi: align(0), pref: align(64) },
+            alloca_address_space: Default::default(),
+            instruction_address_space: Default::default(),
             vector_align: vec![
                 (Size::from_bits(64), AbiAndPrefAlign::new(align(64))),
                 (Size::from_bits(128), AbiAndPrefAlign::new(align(128))),
             ],
-            instruction_address_space: AddressSpace::DATA,
         }
     }
 }
@@ -65,11 +69,10 @@ impl TargetDataLayout {
     pub fn parse(target: &Target) -> Result<TargetDataLayout, String> {
         // Parse an address space index from a string.
         let parse_address_space = |s: &str, cause: &str| {
-            s.parse::<u32>().map(AddressSpace).map_err(|err| {
+            s.parse::<u32>().map(AddrSpaceIdx).map_err(|err| {
                 format!("invalid address space `{}` for `{}` in \"data-layout\": {}", s, cause, err)
             })
         };
-
         // Parse a bit count from a string.
         let parse_bits = |s: &str, kind: &str, cause: &str| {
             s.parse::<u64>().map_err(|err| {
@@ -95,6 +98,16 @@ impl TargetDataLayout {
             Ok(AbiAndPrefAlign { abi: align_from_bits(abi)?, pref: align_from_bits(pref)? })
         };
 
+        fn resize_and_set<T>(vec: &mut Vec<T>, idx: usize, v: T)
+            where T: Default,
+        {
+          while idx >= vec.len() {
+            vec.push(T::default());
+          }
+
+          vec[idx] = v;
+        }
+
         let mut dl = TargetDataLayout::default();
         let mut i128_align_src = 64;
         for spec in target.data_layout.split('-') {
@@ -103,15 +116,22 @@ impl TargetDataLayout {
             match &*spec_parts {
                 ["e"] => dl.endian = Endian::Little,
                 ["E"] => dl.endian = Endian::Big,
-                [p] if p.starts_with('P') => {
-                    dl.instruction_address_space = parse_address_space(&p[1..], "P")?
-                }
                 ["a", ref a @ ..] => dl.aggregate_align = align(a, "a")?,
                 ["f32", ref a @ ..] => dl.f32_align = align(a, "f32")?,
                 ["f64", ref a @ ..] => dl.f64_align = align(a, "f64")?,
-                [p @ "p", s, ref a @ ..] | [p @ "p0", s, ref a @ ..] => {
-                    dl.pointer_size = size(s, p)?;
-                    dl.pointer_align = align(a, p)?;
+                [p, s, ref a @ ..] if p.starts_with('p') => {
+                    let idx = if p != &"p" {
+                        parse_address_space(&p[1..], "address space index")?
+                    } else {
+                        Default::default()
+                    };
+                    let size = size(s, p)?;
+                    let align = align(a, p)?;
+                    resize_and_set(&mut dl.pointers, idx.0 as _, Some((size, align)));
+                }
+                [ref p] if p.starts_with("P") => {
+                    let idx = parse_address_space(&p[1..], "instruction address space")?;
+                    dl.instruction_address_space = idx;
                 }
                 [s, ref a @ ..] if s.starts_with('i') => {
                     let bits = match s[1..].parse::<u64>() {
@@ -147,6 +167,11 @@ impl TargetDataLayout {
                     // No existing entry, add a new one.
                     dl.vector_align.push((v_size, a));
                 }
+                [s, ..] if s.starts_with("A") => {
+                    // default alloca address space
+                    let idx = parse_address_space(&s[1..], "default alloca address space")?;
+                    dl.alloca_address_space = idx;
+                }
                 _ => {} // Ignore everything else.
             }
         }
@@ -173,7 +198,35 @@ impl TargetDataLayout {
             ));
         }
 
+        // We don't specialize pointer sizes for specific address spaces,
+        // so enforce that the default address space can hold all the bits
+        // of any other spaces. Similar for alignment.
+        {
+            let ptrs_iter = dl.pointers.iter().enumerate()
+              .filter_map(|(idx, ptrs)| {
+                  ptrs.map(|(s, a)| (idx, s, a) )
+              });
+            for (idx, size, align) in ptrs_iter {
+                if size > dl.pointer_size {
+                    return Err(format!("Address space {} pointer is bigger than the default \
+                                    pointer: {} vs {}",
+                                       idx, size.bits(), dl.pointer_size.bits()));
+                }
+                if align.abi > dl.pointer_align.abi {
+                    return Err(format!("Address space {} pointer alignment is bigger than the \
+                                    default pointer: {} vs {}",
+                                       idx, align.abi.bits(), dl.pointer_align.abi.bits()));
+                }
+            }
+        }
+
         Ok(dl)
+    }
+
+    pub fn pointer_info(&self, addr_space: AddrSpaceIdx) -> (Size, AbiAndPrefAlign) {
+        self.pointers.get(addr_space.0 as usize)
+            .and_then(|&v| v )
+            .unwrap_or((self.pointer_size, self.pointer_align))
     }
 
     /// Returns exclusive upper bound on object size.
@@ -744,17 +797,6 @@ impl FieldsShape {
     }
 }
 
-/// An identifier that specifies the address space that some operation
-/// should operate on. Special address spaces have an effect on code generation,
-/// depending on the target and the address spaces it implements.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AddressSpace(pub u32);
-
-impl AddressSpace {
-    /// The default address space, corresponding to data space.
-    pub const DATA: Self = AddressSpace(0);
-}
-
 /// Describes how values of the type are passed by target ABIs,
 /// in terms of categories of C types there are ABI rules for.
 #[derive(Clone, PartialEq, Eq, Hash, Debug, HashStable_Generic)]
@@ -1044,7 +1086,7 @@ pub struct PointeeInfo {
     pub size: Size,
     pub align: Align,
     pub safe: Option<PointerKind>,
-    pub address_space: AddressSpace,
+    pub address_space: AddrSpaceIdx,
 }
 
 pub trait TyAndLayoutMethods<'a, C: LayoutOf<Ty = Self>>: Sized {
@@ -1161,5 +1203,84 @@ impl<'a, Ty> TyAndLayout<'a, Ty> {
 
         // FIXME(#66151): For now, we are conservative and do not check `self.variants`.
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spec::{Target, TargetTriple, };
+
+    #[test]
+    fn pointer_size_align() {
+        // amdgcn-amd-amdhsa-amdgiz
+        const DL: &'static str = "e-p:64:64-p1:64:64-p2:64:64-p3:32:32-\
+                                  p4:32:32-p5:32:32-i64:64-v16:16-v24:32-\
+                                  v32:32-v48:64-v96:128-v192:256-v256:256-\
+                                  v512:512-v1024:1024-v2048:2048-n32:64-A5";
+
+        // Doesn't need to be real...
+        let triple = TargetTriple::TargetTriple("x86_64-unknown-linux-gnu".into());
+        let mut target = Target::search(&triple).unwrap();
+        target.data_layout = DL.into();
+
+        let dl = TargetDataLayout::parse(&target);
+        assert!(dl.is_ok());
+        let dl = dl.unwrap();
+
+        let default = (dl.pointer_size, dl.pointer_align);
+
+        let thirty_two_size = Size::from_bits(32);
+        let thirty_two_align = AbiAndPrefAlign::new(Align::from_bits(32).unwrap());
+        let thirty_two = (thirty_two_size, thirty_two_align);
+        let sixty_four_size = Size::from_bits(64);
+        let sixty_four_align = AbiAndPrefAlign::new(Align::from_bits(64).unwrap());
+        let sixty_four = (sixty_four_size, sixty_four_align);
+
+        assert_eq!(dl.pointer_info(AddrSpaceIdx(0)), default);
+        assert_eq!(dl.pointer_info(AddrSpaceIdx(0)), sixty_four);
+        assert_eq!(dl.pointer_info(AddrSpaceIdx(1)), sixty_four);
+        assert_eq!(dl.pointer_info(AddrSpaceIdx(2)), sixty_four);
+        assert_eq!(dl.pointer_info(AddrSpaceIdx(3)), thirty_two);
+        assert_eq!(dl.pointer_info(AddrSpaceIdx(4)), thirty_two);
+        assert_eq!(dl.pointer_info(AddrSpaceIdx(5)), thirty_two);
+
+        // unknown address spaces need to be the same as the default:
+        assert_eq!(dl.pointer_info(AddrSpaceIdx(7)), default);
+    }
+
+    #[test]
+    fn default_is_biggest() {
+        // Note p1 is 128 bits.
+        const DL: &'static str = "e-p:64:64-p1:128:128-p2:64:64-p3:32:32-\
+                                  p4:32:32-p5:32:32-i64:64-v16:16-v24:32-\
+                                  v32:32-v48:64-v96:128-v192:256-v256:256-\
+                                  v512:512-v1024:1024-v2048:2048-n32:64-A5";
+
+        // Doesn't need to be real...
+        let triple = TargetTriple::TargetTriple("x86_64-unknown-linux-gnu".into());
+        let mut target = Target::search(&triple).unwrap();
+        target.data_layout = DL.into();
+
+        assert!(TargetDataLayout::parse(&target).is_err());
+    }
+    #[test]
+    fn alloca_addr_space() {
+        // amdgcn-amd-amdhsa-amdgiz
+        const DL: &'static str = "e-p:64:64-p1:64:64-p2:64:64-p3:32:32-\
+                                  p4:32:32-p5:32:32-i64:64-v16:16-v24:32-\
+                                  v32:32-v48:64-v96:128-v192:256-v256:256-\
+                                  v512:512-v1024:1024-v2048:2048-n32:64-A5";
+
+        // Doesn't need to be real...
+        let triple = TargetTriple::TargetTriple("x86_64-unknown-linux-gnu".into());
+        let mut target = Target::search(&triple).unwrap();
+        target.data_layout = DL.into();
+
+        let dl = TargetDataLayout::parse(&target);
+        assert!(dl.is_ok());
+        let dl = dl.unwrap();
+
+        assert_eq!(dl.alloca_address_space, AddrSpaceIdx(5));
     }
 }

@@ -1,4 +1,4 @@
-use crate::common::Funclet;
+use crate::common::{Funclet, val_addr_space, val_addr_space_opt};
 use crate::context::CodegenCx;
 use crate::llvm::{self, BasicBlock, False};
 use crate::llvm::{AtomicOrdering, AtomicRmwBinOp, SynchronizationScope};
@@ -14,11 +14,12 @@ use rustc_codegen_ssa::MemFlags;
 use rustc_data_structures::const_cstr;
 use rustc_data_structures::small_c_str::SmallCStr;
 use rustc_hir::def_id::DefId;
+use rustc_middle::bug;
 use rustc_middle::ty::layout::TyAndLayout;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::sym;
 use rustc_target::abi::{self, Align, Size};
-use rustc_target::spec::{HasTargetSpec, Target};
+use rustc_target::spec::{AddrSpaceIdx, HasTargetSpec, Target};
 use std::borrow::Cow;
 use std::ffi::CStr;
 use std::ops::{Deref, Range};
@@ -578,12 +579,17 @@ impl BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
 
     fn store_with_flags(
         &mut self,
-        val: &'ll Value,
+        mut val: &'ll Value,
         ptr: &'ll Value,
         align: Align,
         flags: MemFlags,
     ) -> &'ll Value {
         debug!("Store {:?} -> {:?} ({:?})", val, ptr, flags);
+        let dest_ptr_ty = self.cx.val_ty(ptr);
+        let dest_ty = self.cx.element_type(dest_ptr_ty);
+        if let Some(dest_as) = self.cx.type_addr_space(dest_ty) {
+            val = self.addrspace_cast(val, dest_as);
+        }
         let ptr = self.check_store(val, ptr);
         unsafe {
             let store = llvm::LLVMBuildStore(self.llbuilder, val, ptr);
@@ -803,28 +809,69 @@ impl BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn ptrtoint(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
+        let val = self.flat_addr_cast(val);
         unsafe { llvm::LLVMBuildPtrToInt(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn inttoptr(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
+        let dest_ty = dest_ty.copy_addr_space(self.cx().flat_addr_space());
         unsafe { llvm::LLVMBuildIntToPtr(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     fn bitcast(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
+        let dest_ty = dest_ty.copy_addr_space(val_addr_space(val));
         unsafe { llvm::LLVMBuildBitCast(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
+    /// address space casts, then bitcasts to dest_ty without changing address spaces.
+    fn as_ptr_cast(&mut self, val: &'ll Value,
+                   addr_space: AddrSpaceIdx,
+                   dest_ty: &'ll Type) -> &'ll Value
+    {
+        let val = self.addrspace_cast(val, addr_space);
+        self.pointercast(val, dest_ty.copy_addr_space(addr_space))
+    }
+    fn flat_as_ptr_cast(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
+        self.as_ptr_cast(val, self.cx().flat_addr_space(), dest_ty)
+    }
+
+    fn addrspace_cast(&mut self, val: &'ll Value, dest: AddrSpaceIdx) -> &'ll Value {
+        // LLVM considers no-op address space casts to be invalid.
+        let src_ty = self.cx.val_ty(val);
+        if src_ty.is_ptr() && src_ty.address_space() != dest {
+            let dest_ty = src_ty.copy_addr_space(dest);
+            self.cx().check_addr_space_cast(val, dest_ty);
+            unsafe { llvm::LLVMBuildAddrSpaceCast(self.llbuilder, val, dest_ty, UNNAMED) }
+        } else {
+            val
+        }
+    }
+
+    fn flat_addr_cast(&mut self, val: &'ll Value) -> &'ll Value {
+        self.addrspace_cast(val, self.cx().flat_addr_space())
+    }
     fn intcast(&mut self, val: &'ll Value, dest_ty: &'ll Type, is_signed: bool) -> &'ll Value {
         unsafe { llvm::LLVMRustBuildIntCast(self.llbuilder, val, dest_ty, is_signed) }
     }
 
     fn pointercast(&mut self, val: &'ll Value, dest_ty: &'ll Type) -> &'ll Value {
+        let dest_ty = dest_ty.copy_addr_space(val_addr_space(val));
         unsafe { llvm::LLVMBuildPointerCast(self.llbuilder, val, dest_ty, UNNAMED) }
     }
 
     /* Comparisons */
     fn icmp(&mut self, op: IntPredicate, lhs: &'ll Value, rhs: &'ll Value) -> &'ll Value {
         let op = llvm::IntPredicate::from_generic(op);
+
+        match (val_addr_space_opt(lhs), val_addr_space_opt(rhs)) {
+            (Some(l), Some(r)) if l == r => {},
+            (Some(l), Some(r)) if l != r => {
+                bug!("tried to cmp ptrs of different addr spaces: lhs {:?} rhs {:?}",
+                     lhs, rhs);
+            },
+            _ => {},
+        }
+
         unsafe { llvm::LLVMBuildICmp(self.llbuilder, op as c_uint, lhs, rhs, UNNAMED) }
     }
 
@@ -1115,11 +1162,11 @@ impl BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn lifetime_start(&mut self, ptr: &'ll Value, size: Size) {
-        self.call_lifetime_intrinsic("llvm.lifetime.start.p0i8", ptr, size);
+        self.call_lifetime_intrinsic("llvm.lifetime.start", ptr, size);
     }
 
     fn lifetime_end(&mut self, ptr: &'ll Value, size: Size) {
-        self.call_lifetime_intrinsic("llvm.lifetime.end.p0i8", ptr, size);
+        self.call_lifetime_intrinsic("llvm.lifetime.end", ptr, size);
     }
 
     fn instrprof_increment(
@@ -1316,7 +1363,8 @@ impl Builder<'a, 'll, 'tcx> {
     fn check_store(&mut self, val: &'ll Value, ptr: &'ll Value) -> &'ll Value {
         let dest_ptr_ty = self.cx.val_ty(ptr);
         let stored_ty = self.cx.val_ty(val);
-        let stored_ptr_ty = self.cx.type_ptr_to(stored_ty);
+        let stored_ptr_ty = self.cx.type_as_ptr_to(stored_ty,
+                                                   dest_ptr_ty.address_space());
 
         assert_eq!(self.cx.type_kind(dest_ptr_ty), TypeKind::Pointer);
 
@@ -1374,7 +1422,18 @@ impl Builder<'a, 'll, 'tcx> {
                             Expected {:?} for param {}, got {:?}; injecting bitcast",
                         llfn, expected_ty, i, actual_ty
                     );
-                    self.bitcast(actual_val, expected_ty)
+                    if expected_ty.is_ptr() && actual_ty.is_ptr() {
+                        let actual_val = self.addrspace_cast(actual_val,
+                                                             expected_ty.address_space());
+                        self.pointercast(actual_val, expected_ty)
+                    } else {
+                        let actual_val = if actual_ty.is_ptr() {
+                            self.flat_addr_cast(actual_val)
+                        } else {
+                            actual_val
+                        };
+                        self.bitcast(actual_val, expected_ty)
+                    }
                 } else {
                     actual_val
                 }
@@ -1398,7 +1457,9 @@ impl Builder<'a, 'll, 'tcx> {
             return;
         }
 
-        let lifetime_intrinsic = self.cx.get_intrinsic(intrinsic);
+        let addr_space = self.cx.val_ty(ptr).address_space();
+        let intrinsic = format!("{}.p{}i8", intrinsic, addr_space);
+        let lifetime_intrinsic = self.cx.get_intrinsic(&intrinsic);
 
         let ptr = self.pointercast(ptr, self.cx.type_i8p());
         self.call(lifetime_intrinsic, &[self.cx.const_u64(size), ptr], None);

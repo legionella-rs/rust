@@ -148,7 +148,9 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
             // Reconstruct the immediate aggregate.
             let mut llpair = bx.cx().const_undef(llty);
             let imm_a = bx.from_immediate(a);
+            let imm_a = bx.flat_addr_cast(imm_a);
             let imm_b = bx.from_immediate(b);
+            let imm_b = bx.flat_addr_cast(imm_b);
             llpair = bx.insert_value(llpair, imm_a, 0);
             llpair = bx.insert_value(llpair, imm_b, 1);
             llpair
