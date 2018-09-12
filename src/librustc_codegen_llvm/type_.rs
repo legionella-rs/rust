@@ -16,6 +16,7 @@ use rustc_middle::ty::layout::TyAndLayout;
 use rustc_middle::ty::Ty;
 use rustc_target::abi::call::{CastTarget, FnAbi, Reg};
 use rustc_target::abi::{Align, Integer, Size};
+use rustc_target::spec::AddrSpaceIdx;
 
 use std::fmt;
 use std::ptr;
@@ -194,13 +195,8 @@ impl BaseTypeMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         unsafe { llvm::LLVMRustGetTypeKind(ty).to_generic() }
     }
 
-    fn type_ptr_to(&self, ty: &'ll Type) -> &'ll Type {
-        assert_ne!(
-            self.type_kind(ty),
-            TypeKind::Function,
-            "don't call ptr_to on function types, use ptr_to_llvm_type on FnAbi instead"
-        );
-        ty.ptr_to()
+    fn type_as_ptr_to(&self, ty: &'ll Type, addr_space: AddrSpaceIdx) -> &'ll Type {
+        ty.ptr_to(addr_space)
     }
 
     fn element_type(&self, ty: &'ll Type) -> &'ll Type {
@@ -228,6 +224,14 @@ impl BaseTypeMethods<'tcx> for CodegenCx<'ll, 'tcx> {
     fn val_ty(&self, v: &'ll Value) -> &'ll Type {
         common::val_ty(v)
     }
+
+    fn type_addr_space(&self, ty: &'ll Type) -> Option<AddrSpaceIdx> {
+        if self.type_kind(ty) == TypeKind::Pointer {
+            Some(ty.address_space())
+        } else {
+            None
+        }
+    }
 }
 
 impl Type {
@@ -241,11 +245,36 @@ impl Type {
     }
 
     pub fn i8p_llcx(llcx: &llvm::Context) -> &Type {
-        Type::i8_llcx(llcx).ptr_to()
+        Type::i8_llcx(llcx).ptr_to(Default::default())
     }
 
-    fn ptr_to(&self) -> &Type {
-        unsafe { llvm::LLVMPointerType(&self, 0) }
+    pub fn kind(&self) -> TypeKind {
+        unsafe {
+            llvm::LLVMRustGetTypeKind(self).to_generic()
+        }
+    }
+    pub fn is_ptr(&self) -> bool {
+        self.kind() == TypeKind::Pointer
+    }
+
+    fn element_type(&self) -> &Type {
+        unsafe { llvm::LLVMGetElementType(self) }
+    }
+
+    fn ptr_to(&self, addr_space: AddrSpaceIdx) -> &Type {
+        unsafe { llvm::LLVMPointerType(&self, addr_space.0) }
+    }
+    pub fn address_space(&self) -> AddrSpaceIdx {
+        AddrSpaceIdx(unsafe { llvm::LLVMGetPointerAddressSpace(self) })
+    }
+    pub fn copy_addr_space(&self, addr_space: AddrSpaceIdx) -> &Type {
+        if !self.is_ptr() { return self; }
+
+        if addr_space != self.address_space() {
+            self.element_type().ptr_to(addr_space)
+        } else {
+            self
+        }
     }
 }
 
@@ -276,8 +305,8 @@ impl LayoutTypeMethods<'tcx> for CodegenCx<'ll, 'tcx> {
     fn cast_backend_type(&self, ty: &CastTarget) -> &'ll Type {
         ty.llvm_type(self)
     }
-    fn fn_ptr_backend_type(&self, fn_abi: &FnAbi<'tcx, Ty<'tcx>>) -> &'ll Type {
-        fn_abi.ptr_to_llvm_type(self)
+    fn fn_ptr_backend_type(&self, ty: &FnAbi<'tcx, Ty<'tcx>>) -> &'ll Type {
+        self.type_as_ptr_to(ty.llvm_type(self), self.inst_addr_space())
     }
     fn reg_backend_type(&self, ty: &Reg) -> &'ll Type {
         ty.llvm_type(self)

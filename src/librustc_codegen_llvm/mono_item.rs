@@ -10,7 +10,7 @@ use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 pub use rustc_middle::mir::mono::MonoItem;
 use rustc_middle::mir::mono::{Linkage, Visibility};
 use rustc_middle::ty::layout::FnAbiExt;
-use rustc_middle::ty::{Instance, TypeFoldable};
+use rustc_middle::ty::{Instance, TypeFoldable, ParamEnv};
 use rustc_target::abi::LayoutOf;
 
 impl PreDefineMethods<'tcx> for CodegenCx<'ll, 'tcx> {
@@ -24,8 +24,15 @@ impl PreDefineMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         let instance = Instance::mono(self.tcx, def_id);
         let ty = instance.monomorphic_ty(self.tcx);
         let llty = self.layout_of(ty).llvm_type(self);
+        let span = self.tcx.def_span(def_id);
+        let freeze = ty.is_freeze(self.tcx, ParamEnv::reveal_all(), span);
+        let addr_space = if self.tcx.is_mutable_static(def_id) || !freeze {
+            self.mutable_addr_space()
+        } else {
+            self.const_addr_space()
+        };
 
-        let g = self.define_global(symbol_name, llty).unwrap_or_else(|| {
+        let g = self.define_global(symbol_name, llty, addr_space).unwrap_or_else(|| {
             self.sess().span_fatal(
                 self.tcx.def_span(def_id),
                 &format!("symbol `{}` is already defined", symbol_name),

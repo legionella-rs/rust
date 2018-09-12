@@ -21,6 +21,7 @@ use crate::value::Value;
 use log::debug;
 use rustc_codegen_ssa::traits::*;
 use rustc_middle::ty::Ty;
+use rustc_target::spec::AddrSpaceIdx;
 
 /// Declare a function.
 ///
@@ -52,9 +53,22 @@ fn declare_raw_fn(
 }
 
 impl DeclareMethods<'tcx> for CodegenCx<'ll, 'tcx> {
-    fn declare_global(&self, name: &str, ty: &'ll Type) -> &'ll Value {
+    fn declare_global(
+        &self,
+        name: &str,
+        ty: &'ll Type,
+        addr_space: AddrSpaceIdx,
+    ) -> &'ll Value {
         debug!("declare_global(name={:?})", name);
-        unsafe { llvm::LLVMRustGetOrInsertGlobal(self.llmod, name.as_ptr().cast(), name.len(), ty) }
+        unsafe {
+            llvm::LLVMRustGetOrInsertGlobal(
+                self.llmod,
+                name.as_ptr().cast(),
+                name.len(),
+                ty,
+                addr_space.0,
+            )
+        }
     }
 
     fn declare_cfn(&self, name: &str, fn_type: &'ll Type) -> &'ll Value {
@@ -69,16 +83,21 @@ impl DeclareMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         llfn
     }
 
-    fn define_global(&self, name: &str, ty: &'ll Type) -> Option<&'ll Value> {
+    fn define_global(
+        &self,
+        name: &str,
+        ty: &'ll Type,
+        addr_space: AddrSpaceIdx
+    ) -> Option<&'ll Value> {
         if self.get_defined_value(name).is_some() {
             None
         } else {
-            Some(self.declare_global(name, ty))
+            Some(self.declare_global(name, ty, addr_space))
         }
     }
 
-    fn define_private_global(&self, ty: &'ll Type) -> &'ll Value {
-        unsafe { llvm::LLVMRustInsertPrivateGlobal(self.llmod, ty) }
+    fn define_private_global(&self, ty: &'ll Type, addr_space: AddrSpaceIdx) -> &'ll Value {
+        unsafe { llvm::LLVMRustInsertPrivateGlobal(self.llmod, ty, addr_space.0) }
     }
 
     fn get_declared_value(&self, name: &str) -> Option<&'ll Value> {

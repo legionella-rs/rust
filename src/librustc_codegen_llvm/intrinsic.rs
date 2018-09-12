@@ -975,11 +975,13 @@ fn codegen_msvc_try(
         //
         // When modifying, make sure that the type_name string exactly matches
         // the one used in src/libpanic_unwind/seh.rs.
-        let type_info_vtable = bx.declare_global("??_7type_info@@6B@", bx.type_i8p());
+        let type_info_vtable = bx.declare_global("??_7type_info@@6B@", bx.type_flat_i8p(),
+                                                 bx.cx.flat_addr_space());
         let type_name = bx.const_bytes(b"rust_panic\0");
         let type_info =
-            bx.const_struct(&[type_info_vtable, bx.const_null(bx.type_i8p()), type_name], false);
-        let tydesc = bx.declare_global("__rust_panic_type_info", bx.val_ty(type_info));
+            bx.const_struct(&[type_info_vtable, bx.const_null(bx.type_flat_i8p()), type_name], false);
+        let tydesc = bx.declare_global("__rust_panic_type_info", bx.val_ty(type_info),
+                                       bx.cx.const_addr_space());
         unsafe {
             llvm::LLVMRustSetLinkage(tydesc, llvm::Linkage::LinkOnceODRLinkage);
             llvm::SetUniqueComdat(bx.llmod, tydesc);
@@ -1063,9 +1065,9 @@ fn codegen_gnu_try(
         let tydesc = match bx.tcx().lang_items().eh_catch_typeinfo() {
             Some(tydesc) => {
                 let tydesc = bx.get_static(tydesc);
-                bx.bitcast(tydesc, bx.type_i8p())
+                bx.flat_as_ptr_cast(tydesc, bx.type_i8p())
             }
-            None => bx.const_null(bx.type_i8p()),
+            None => bx.const_null(bx.type_flat_i8p()),
         };
         catch.add_clause(vals, tydesc);
         let ptr = catch.extract_value(vals, 0);
