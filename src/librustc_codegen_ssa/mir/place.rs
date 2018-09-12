@@ -77,6 +77,16 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         Self::new_sized(tmp, layout)
     }
 
+    /// An alloca, left in the alloca address space. If unsure, use `alloca` below.
+    pub fn alloca_addr_space<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
+        bx: &mut Bx,
+        layout: TyLayout<'tcx>
+    ) -> Self {
+        assert!(!layout.is_unsized(), "tried to statically allocate unsized place");
+        let tmp = bx.alloca(bx.cx().backend_type(layout), layout.align.abi);
+        Self::new_sized(tmp, layout)
+    }
+
     /// Returns a place for an indirect reference to an unsized place.
     pub fn alloca_unsized_indirect<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
         bx: &mut Bx,
@@ -85,7 +95,7 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         assert!(layout.is_unsized(), "tried to allocate indirect place for sized values");
         let ptr_ty = bx.cx().tcx().mk_mut_ptr(layout.ty);
         let ptr_layout = bx.cx().layout_of(ptr_ty);
-        Self::alloca(bx, ptr_layout)
+        Self::alloca_addr_space(bx, ptr_layout)
     }
 
     pub fn len<Cx: ConstMethods<'tcx, Value = V>>(

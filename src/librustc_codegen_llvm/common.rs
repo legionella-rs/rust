@@ -13,7 +13,9 @@ use rustc_codegen_ssa::traits::*;
 use crate::consts::const_alloc_to_llvm;
 use rustc::ty::layout::{HasDataLayout, LayoutOf, self, TyLayout, Size};
 use rustc::mir::interpret::{Scalar, GlobalAlloc, Allocation};
+use rustc_codegen_ssa::common::TypeKind;
 use rustc_codegen_ssa::mir::place::PlaceRef;
+use rustc_target::spec::AddrSpaceIdx;
 
 use libc::{c_uint, c_char};
 
@@ -138,9 +140,11 @@ impl CodegenCx<'ll, 'tcx> {
                                                     s_str.len() as c_uint,
                                                     !null_terminated as Bool);
             let sym = self.generate_local_symbol_name("str");
-            let g = self.define_global(&sym[..], self.val_ty(sc)).unwrap_or_else(||{
-                bug!("symbol `{}` is already defined", sym);
-            });
+            let g = self.define_global(&sym[..], self.val_ty(sc),
+                                       self.const_addr_space())
+                .unwrap_or_else(||{
+                    bug!("symbol `{}` is already defined", sym);
+                });
             llvm::LLVMSetInitializer(g, sc);
             llvm::LLVMSetGlobalConstant(g, True);
             llvm::LLVMRustSetLinkage(g, llvm::Linkage::InternalLinkage);
@@ -264,6 +268,10 @@ impl ConstMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         })
     }
 
+    fn const_as_cast(&self, val: &'ll Value, addr_space: AddrSpaceIdx) -> &'ll Value {
+        self.const_addrcast(val, addr_space)
+    }
+
     fn scalar_to_backend(
         &self,
         cv: Scalar,
@@ -279,10 +287,16 @@ impl ConstMethods<'tcx> for CodegenCx<'ll, 'tcx> {
             Scalar::Raw { data, size } => {
                 assert_eq!(size as u64, layout.value.size(self).bytes());
                 let llval = self.const_uint_big(self.type_ix(bitsize), data);
-                if layout.value == layout::Pointer {
-                    unsafe { llvm::LLVMConstIntToPtr(llval, llty) }
+                let flat_llty = llty.copy_addr_space(self.flat_addr_space());
+                let llval = if layout.value == layout::Pointer {
+                    unsafe { llvm::LLVMConstIntToPtr(llval, flat_llty) }
                 } else {
-                    self.const_bitcast(llval, llty)
+                    self.const_bitcast(llval, flat_llty)
+                };
+                if llty.is_ptr() {
+                    self.const_as_cast(llval, llty.address_space())
+                } else {
+                    llval
                 }
             },
             Scalar::Ptr(ptr) => {
@@ -291,7 +305,8 @@ impl ConstMethods<'tcx> for CodegenCx<'ll, 'tcx> {
                     Some(GlobalAlloc::Memory(alloc)) => {
                         let init = const_alloc_to_llvm(self, alloc);
                         if alloc.mutability == Mutability::Mutable {
-                            self.static_addr_of_mut(init, alloc.align, None)
+                            self.static_addr_of_mut(init, alloc.align, None,
+                                                    self.mutable_addr_space())
                         } else {
                             self.static_addr_of(init, alloc.align, None)
                         }
@@ -310,6 +325,7 @@ impl ConstMethods<'tcx> for CodegenCx<'ll, 'tcx> {
                     &self.const_usize(ptr.offset.bytes()),
                     1,
                 ) };
+                let llval = self.const_flat_as_cast(llval);
                 if layout.value != layout::Pointer {
                     unsafe { llvm::LLVMConstPtrToInt(llval, llty) }
                 } else {
@@ -353,6 +369,17 @@ pub fn val_ty(v: &'ll Value) -> &'ll Type {
     unsafe {
         llvm::LLVMTypeOf(v)
     }
+}
+pub fn val_addr_space_opt(v: &'ll Value) -> Option<AddrSpaceIdx> {
+    let ty = val_ty(v);
+    if ty.kind() == TypeKind::Pointer {
+        Some(ty.address_space())
+    } else {
+        None
+    }
+}
+pub fn val_addr_space(v: &'ll Value) -> AddrSpaceIdx {
+    val_addr_space_opt(v).unwrap_or_default()
 }
 
 pub fn bytes_in_context(llcx: &'ll llvm::Context, bytes: &[u8]) -> &'ll Value {

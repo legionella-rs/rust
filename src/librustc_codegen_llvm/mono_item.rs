@@ -5,7 +5,7 @@ use crate::llvm;
 use crate::type_of::LayoutLlvmExt;
 use rustc::hir::def_id::{DefId, LOCAL_CRATE};
 use rustc::mir::mono::{Linkage, Visibility};
-use rustc::ty::{TypeFoldable, Instance};
+use rustc::ty::{TypeFoldable, Instance, ParamEnv};
 use rustc::ty::layout::{LayoutOf, HasTyCtxt};
 use rustc_codegen_ssa::traits::*;
 
@@ -20,8 +20,15 @@ impl PreDefineMethods<'tcx> for CodegenCx<'ll, 'tcx> {
         let instance = Instance::mono(self.tcx, def_id);
         let ty = instance.ty(self.tcx);
         let llty = self.layout_of(ty).llvm_type(self);
+        let span = self.tcx.def_span(def_id);
+        let freeze = ty.is_freeze(self.tcx, ParamEnv::reveal_all(), span);
+        let addr_space = if self.tcx.is_mutable_static(def_id) || !freeze {
+            self.mutable_addr_space()
+        } else {
+            self.const_addr_space()
+        };
 
-        let g = self.define_global(symbol_name, llty).unwrap_or_else(|| {
+        let g = self.define_global(symbol_name, llty, addr_space).unwrap_or_else(|| {
             self.sess().span_fatal(self.tcx.def_span(def_id),
                 &format!("symbol `{}` is already defined", symbol_name))
         });

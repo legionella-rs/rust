@@ -266,7 +266,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                     // FIXME: add an appropriate debuginfo
                     LocalRef::UnsizedPlace(indirect_place)
                 } else {
-                    let place = PlaceRef::alloca(&mut bx, layout);
+                    let place = PlaceRef::alloca_addr_space(&mut bx, layout);
                     bx.set_var_name(place.llval, name);
                     if dbg {
                         let (scope, span) = fx.debug_loc(mir::SourceInfo {
@@ -292,7 +292,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                         bx.set_var_name(indirect_place.llval, format_args!("{:?}", local));
                         LocalRef::UnsizedPlace(indirect_place)
                     } else {
-                        let place = PlaceRef::alloca(&mut bx, layout);
+                        let place = PlaceRef::alloca_addr_space(&mut bx, layout);
                         bx.set_var_name(place.llval, format_args!("{:?}", local));
                         LocalRef::Place(place)
                     }
@@ -455,7 +455,7 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 _ => bug!("spread argument isn't a tuple?!")
             };
 
-            let place = PlaceRef::alloca(bx, bx.layout_of(arg_ty));
+            let place = PlaceRef::alloca_addr_space(bx, bx.layout_of(arg_ty));
             bx.set_var_name(place.llval, name);
             for i in 0..tupled_arg_tys.len() {
                 let arg = &fx.fn_ty.args[idx];
@@ -573,7 +573,7 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             indirect_operand.store(bx, tmp);
             tmp
         } else {
-            let tmp = PlaceRef::alloca(bx, arg.layout);
+            let tmp = PlaceRef::alloca_addr_space(bx, arg.layout);
             bx.set_var_name(tmp.llval, name);
             bx.store_fn_arg(arg, &mut llarg_idx, tmp);
             tmp
