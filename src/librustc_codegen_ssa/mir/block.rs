@@ -296,7 +296,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 let llslot = match op.val {
                     Immediate(_) | Pair(..) => {
                         let scratch =
-                            PlaceRef::alloca(&mut bx, self.fn_abi.ret.layout);
+                            PlaceRef::alloca_addr_space(&mut bx, self.fn_abi.ret.layout);
                         op.val.store(&mut bx, scratch);
                         scratch.llval
                     }
@@ -312,6 +312,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 bx.load(addr, self.fn_abi.ret.layout.align.abi)
             }
         };
+        // make sure pointers are flat:
+        let llval = bx.flat_addr_cast(llval);
         bx.ret(llval);
     }
 
@@ -432,7 +434,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             _ => {
                 let msg_str = Symbol::intern(msg.description());
                 let msg = bx.const_str(msg_str);
-                (lang_items::PanicFnLangItem, vec![msg.0, msg.1, location])
+                let msg_0 = bx.cx().const_flat_as_cast(msg.0);
+                (lang_items::PanicFnLangItem, vec![msg_0, msg.1, location])
             }
         };
 
@@ -535,6 +538,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             if layout.abi.is_uninhabited() {
                 let msg_str = format!("Attempted to instantiate uninhabited type {}", ty);
                 let msg = bx.const_str(Symbol::intern(&msg_str));
+                let msg_0 = bx.cx().const_flat_as_cast(msg.0);
                 let location = self.get_caller_location(&mut bx, span).immediate();
 
                 // Obtain the panic entry point.
@@ -553,7 +557,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     &mut bx,
                     fn_abi,
                     llfn,
-                    &[msg.0, msg.1, location],
+                    &[msg_0, msg.1, location],
                     destination.as_ref().map(|(_, bb)| (ReturnDest::Nothing, *bb)),
                     cleanup,
                 );
@@ -910,7 +914,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             Immediate(_) | Pair(..) => {
                 match arg.mode {
                     PassMode::Indirect(..) | PassMode::Cast(_) => {
-                        let scratch = PlaceRef::alloca(bx, arg.layout);
+                        let scratch = PlaceRef::alloca_addr_space(bx, arg.layout);
                         op.val.store(bx, scratch);
                         (scratch.llval, scratch.align, true)
                     }
@@ -925,12 +929,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     // think that ATM (Rust 1.16) we only pass temporaries, but we shouldn't
                     // have scary latent bugs around.
 
-                    let scratch = PlaceRef::alloca(bx, arg.layout);
+                    let scratch = PlaceRef::alloca_addr_space(bx, arg.layout);
                     base::memcpy_ty(bx, scratch.llval, scratch.align, llval, align,
                                     op.layout, MemFlags::empty());
                     (scratch.llval, scratch.align, true)
                 } else {
-                    (llval, align, true)
+                    (bx.flat_addr_cast(llval), align, true)
                 }
             }
         };
@@ -1017,7 +1021,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 cx.tcx().mk_mut_ptr(cx.tcx().types.u8),
                 cx.tcx().types.i32
             ]));
-            let slot = PlaceRef::alloca(bx, layout);
+            let slot = PlaceRef::alloca_addr_space(bx, layout);
             self.personality_slot = Some(slot);
             slot
         }
@@ -1113,7 +1117,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     return if fn_ret.is_indirect() {
                         // Odd, but possible, case, we have an operand temporary,
                         // but the calling convention has an indirect return.
-                        let tmp = PlaceRef::alloca(bx, fn_ret.layout);
+                        let tmp = PlaceRef::alloca_addr_space(bx, fn_ret.layout);
                         tmp.storage_live(bx);
                         llargs.push(tmp.llval);
                         ReturnDest::IndirectOperand(tmp, index)
@@ -1121,7 +1125,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         // Currently, intrinsics always need a location to store
                         // the result, so we create a temporary `alloca` for the
                         // result.
-                        let tmp = PlaceRef::alloca(bx, fn_ret.layout);
+                        let tmp = PlaceRef::alloca_addr_space(bx, fn_ret.layout);
                         tmp.storage_live(bx);
                         ReturnDest::IndirectOperand(tmp, index)
                     } else {
@@ -1168,7 +1172,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 LocalRef::Operand(None) => {
                     let dst_layout = bx.layout_of(self.monomorphized_place_ty(&dst.as_ref()));
                     assert!(!dst_layout.ty.has_erasable_regions());
-                    let place = PlaceRef::alloca(bx, dst_layout);
+                    let place = PlaceRef::alloca_addr_space(bx, dst_layout);
                     place.storage_live(bx);
                     self.codegen_transmute_into(bx, src, place);
                     let op = bx.load_operand(place);
@@ -1221,7 +1225,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             DirectOperand(index) => {
                 // If there is a cast, we have to store and reload.
                 let op = if let PassMode::Cast(_) = ret_abi.mode {
-                    let tmp = PlaceRef::alloca(bx, ret_abi.layout);
+                    let tmp = PlaceRef::alloca_addr_space(bx, ret_abi.layout);
                     tmp.storage_live(bx);
                     bx.store_arg(&ret_abi, llval, tmp);
                     let op = bx.load_operand(tmp);
