@@ -222,7 +222,7 @@ pub struct InliningMap<'tcx> {
 
 impl<'tcx> InliningMap<'tcx> {
 
-    fn new() -> InliningMap<'tcx> {
+    pub fn new() -> InliningMap<'tcx> {
         InliningMap {
             index: FxHashMap::default(),
             targets: Vec::new(),
@@ -230,7 +230,7 @@ impl<'tcx> InliningMap<'tcx> {
         }
     }
 
-    fn record_accesses<I>(&mut self,
+    pub fn record_accesses<I>(&mut self,
                           source: MonoItem<'tcx>,
                           new_targets: I)
         where I: Iterator<Item=(MonoItem<'tcx>, bool)> + ExactSizeIterator

@@ -12,7 +12,7 @@ use log::debug;
 /// Used mainly for Lazy positions and lengths.
 /// Unchecked invariant: `Self::default()` should encode as `[0; BYTE_LEN]`,
 /// but this has no impact on safety.
-crate trait FixedSizeEncoding: Default {
+pub trait FixedSizeEncoding: Default {
     const BYTE_LEN: usize;
 
     // FIXME(eddyb) convert to and from `[u8; Self::BYTE_LEN]` instead,
@@ -126,7 +126,7 @@ impl<T: Encodable> FixedSizeEncoding for Option<Lazy<[T]>> {
 // FIXME(eddyb) replace `Vec` with `[_]` here, such that `Box<Table<T>>` would be used
 // when building it, and `Lazy<Table<T>>` or `&Table<T>` when reading it.
 // (not sure if that is possible given that the `Vec` is being resized now)
-crate struct Table<T> where Option<T>: FixedSizeEncoding {
+pub struct Table<T> where Option<T>: FixedSizeEncoding {
     // FIXME(eddyb) store `[u8; <Option<T>>::BYTE_LEN]` instead of `u8` in `Vec`,
     // once that starts being allowed by the compiler (i.e. lazy normalization).
     bytes: Vec<u8>,
@@ -194,7 +194,7 @@ impl<T> Lazy<Table<T>> where Option<T>: FixedSizeEncoding {
 /// Like a `Table` but using `DefIndex` instead of `usize` as keys.
 // FIXME(eddyb) replace by making `Table` behave like `IndexVec`,
 // and by using `newtype_index!` to define `DefIndex`.
-crate struct PerDefTable<T>(Table<T>) where Option<T>: FixedSizeEncoding;
+pub struct PerDefTable<T>(Table<T>) where Option<T>: FixedSizeEncoding;
 
 impl<T> Default for PerDefTable<T> where Option<T>: FixedSizeEncoding {
     fn default() -> Self {

@@ -40,7 +40,7 @@ use log::debug;
 use proc_macro::bridge::client::ProcMacro;
 use syntax::ext::proc_macro::{AttrProcMacro, ProcMacroDerive, BangProcMacro};
 
-crate struct DecodeContext<'a, 'tcx> {
+pub struct DecodeContext<'a, 'tcx> {
     opaque: opaque::Decoder<'a>,
     cdata: Option<&'a CrateMetadata>,
     sess: Option<&'tcx Session>,
@@ -56,7 +56,7 @@ crate struct DecodeContext<'a, 'tcx> {
 }
 
 /// Abstract over the various ways one can create metadata decoders.
-crate trait Metadata<'a, 'tcx>: Copy {
+pub trait Metadata<'a, 'tcx>: Copy {
     fn raw_bytes(self) -> &'a [u8];
     fn cdata(self) -> Option<&'a CrateMetadata> { None }
     fn sess(self) -> Option<&'tcx Session> { None }
@@ -132,7 +132,7 @@ impl<'a, 'tcx> Metadata<'a, 'tcx> for (&'a CrateMetadata, TyCtxt<'tcx>) {
 }
 
 impl<'a, 'tcx, T: Encodable + Decodable> Lazy<T> {
-    crate fn decode<M: Metadata<'a, 'tcx>>(self, metadata: M) -> T {
+    pub fn decode<M: Metadata<'a, 'tcx>>(self, metadata: M) -> T {
         let mut dcx = metadata.decoder(self.position.get());
         dcx.lazy_state = LazyState::NodeStart(self.position);
         T::decode(&mut dcx).unwrap()
@@ -140,7 +140,7 @@ impl<'a, 'tcx, T: Encodable + Decodable> Lazy<T> {
 }
 
 impl<'a: 'x, 'tcx: 'x, 'x, T: Encodable + Decodable> Lazy<[T]> {
-    crate fn decode<M: Metadata<'a, 'tcx>>(
+    pub fn decode<M: Metadata<'a, 'tcx>>(
         self,
         metadata: M,
     ) -> impl ExactSizeIterator<Item = T> + Captures<'a> + Captures<'tcx> + 'x {
@@ -400,7 +400,7 @@ impl<'tcx> MetadataBlob {
         ).decode(self)
     }
 
-    crate fn get_root(&self) -> CrateRoot<'tcx> {
+    pub fn get_root(&self) -> CrateRoot<'tcx> {
         let slice = self.raw_bytes();
         let offset = METADATA_HEADER.len();
         let pos = (((slice[offset + 0] as u32) << 24) | ((slice[offset + 1] as u32) << 16) |
