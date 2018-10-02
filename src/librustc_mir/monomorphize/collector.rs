@@ -221,7 +221,7 @@ pub struct InliningMap<'tcx> {
 
 impl<'tcx> InliningMap<'tcx> {
 
-    fn new() -> InliningMap<'tcx> {
+    pub fn new() -> InliningMap<'tcx> {
         InliningMap {
             index: FxHashMap::default(),
             targets: Vec::new(),

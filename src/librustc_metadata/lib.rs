@@ -44,7 +44,7 @@ mod encoder;
 mod decoder;
 mod cstore_impl;
 mod isolated_encoder;
-mod schema;
+pub mod schema;
 mod native_libs;
 mod link_args;
 mod foreign_modules;

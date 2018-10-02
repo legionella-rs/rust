@@ -106,24 +106,24 @@ impl CStore {
         }
     }
 
-    pub(super) fn alloc_new_crate_num(&self) -> CrateNum {
+    pub fn alloc_new_crate_num(&self) -> CrateNum {
         let mut metas = self.metas.borrow_mut();
         let cnum = CrateNum::new(metas.len());
         metas.push(None);
         cnum
     }
 
-    pub(super) fn get_crate_data(&self, cnum: CrateNum) -> Lrc<CrateMetadata> {
+    pub fn get_crate_data(&self, cnum: CrateNum) -> Lrc<CrateMetadata> {
         self.metas.borrow()[cnum].clone().unwrap()
     }
 
-    pub(super) fn set_crate_data(&self, cnum: CrateNum, data: Lrc<CrateMetadata>) {
+    pub fn set_crate_data(&self, cnum: CrateNum, data: Lrc<CrateMetadata>) {
         let mut metas = self.metas.borrow_mut();
         assert!(metas[cnum].is_none(), "Overwriting crate metadata entry");
         metas[cnum] = Some(data);
     }
 
-    pub(super) fn iter_crate_data<I>(&self, mut i: I)
+    pub fn iter_crate_data<I>(&self, mut i: I)
         where I: FnMut(CrateNum, &Lrc<CrateMetadata>)
     {
         for (k, v) in self.metas.borrow().iter_enumerated() {
