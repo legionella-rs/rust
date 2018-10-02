@@ -24,7 +24,7 @@ mod dependency_format;
 mod foreign_modules;
 mod link_args;
 mod native_libs;
-mod rmeta;
+pub mod rmeta;
 
 pub mod creader;
 pub mod dynamic_lib;
