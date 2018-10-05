@@ -33,7 +33,7 @@
 extern crate arena;
 pub extern crate getopts;
 extern crate graphviz;
-extern crate env_logger;
+pub extern crate env_logger;
 #[cfg(unix)]
 extern crate libc;
 extern crate rustc_rayon as rayon;
