@@ -1,6 +1,7 @@
 use crate::mir::mono::Linkage;
 use rustc_attr::{InlineAttr, OptimizeAttr};
 use rustc_span::symbol::Symbol;
+use rustc_target::spec::AddrSpaceIdx;
 
 #[derive(Clone, RustcEncodable, RustcDecodable, HashStable)]
 pub struct CodegenFnAttrs {
@@ -30,6 +31,9 @@ pub struct CodegenFnAttrs {
     /// The `#[link_section = "..."]` attribute, or what executable section this
     /// should be placed in.
     pub link_section: Option<Symbol>,
+    /// The `#[addr_space = "..."]` attribute, or what address space this global
+    /// should be place in. The value names are the same as used in target specs.
+    pub addr_space: Option<AddrSpaceIdx>,
 }
 
 bitflags! {
@@ -92,6 +96,7 @@ impl CodegenFnAttrs {
             target_features: vec![],
             linkage: None,
             link_section: None,
+            addr_space: None,
         }
     }
 

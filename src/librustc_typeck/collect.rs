@@ -44,9 +44,11 @@ use rustc_session::lint;
 use rustc_session::parse::feature_err;
 use rustc_span::symbol::{kw, sym, Symbol};
 use rustc_span::{Span, DUMMY_SP};
-use rustc_target::spec::abi;
+use rustc_target::spec::{abi, AddrSpaceKind};
 
 mod type_of;
+
+use std::str::FromStr;
 
 struct OnlySelfBounds(bool);
 
@@ -2451,6 +2453,16 @@ fn codegen_fn_attrs(tcx: TyCtxt<'_>, id: DefId) -> CodegenFnAttrs {
                             .emit();
                     }
                 }
+            }
+        } else if attr.check_name(sym::address_space) {
+            if let Some(val) = attr.value_str() {
+                let kind = AddrSpaceKind::from_str(&val.as_str()).unwrap();
+                // resolve the kind to an index:
+                let idx = tcx.sess.target.target.options.addr_spaces
+                    .get(&kind)
+                    .map(|v| v.index )
+                    .unwrap_or_default();
+                codegen_fn_attrs.addr_space = Some(idx);
             }
         }
     }
