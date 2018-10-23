@@ -5,3 +5,5 @@ impl_stable_hash_for!(enum ::rustc_target::spec::PanicStrategy {
     Abort,
     Unwind
 });
+
+impl_stable_hash_for!(tuple_struct ::rustc_target::spec::AddrSpaceIdx { index });
