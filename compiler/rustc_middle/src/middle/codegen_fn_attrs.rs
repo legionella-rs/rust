@@ -2,6 +2,7 @@ use crate::mir::mono::Linkage;
 use rustc_attr::{InlineAttr, OptimizeAttr};
 use rustc_session::config::SanitizerSet;
 use rustc_span::symbol::Symbol;
+use rustc_target::spec::AddrSpaceIdx;
 
 #[derive(Clone, TyEncodable, TyDecodable, HashStable)]
 pub struct CodegenFnAttrs {
@@ -34,6 +35,9 @@ pub struct CodegenFnAttrs {
     /// The `#[no_sanitize(...)]` attribute. Indicates sanitizers for which
     /// instrumentation should be disabled inside the annotated function.
     pub no_sanitize: SanitizerSet,
+    /// The `#[addr_space = "..."]` attribute, or what address space this global
+    /// should be place in. The value names are the same as used in target specs.
+    pub addr_space: Option<AddrSpaceIdx>,
 }
 
 bitflags! {
@@ -98,6 +102,7 @@ impl CodegenFnAttrs {
             linkage: None,
             link_section: None,
             no_sanitize: SanitizerSet::empty(),
+            addr_space: None,
         }
     }
 

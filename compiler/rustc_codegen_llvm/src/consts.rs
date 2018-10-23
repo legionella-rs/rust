@@ -108,6 +108,8 @@ fn check_and_apply_linkage(
     span: Span,
 ) -> &'ll Value {
     let llty = cx.layout_of(ty).llvm_type(cx);
+    let addr_space = attrs.addr_space
+      .unwrap_or(cx.flat_addr_space());
     if let Some(linkage) = attrs.linkage {
         debug!("get_static: sym={} linkage={:?}", sym, linkage);
 
@@ -126,7 +128,7 @@ fn check_and_apply_linkage(
         };
         unsafe {
             // Declare a symbol `foo` with the desired linkage.
-            let g1 = cx.declare_global(&sym, llty2, cx.flat_addr_space());
+            let g1 = cx.declare_global(&sym, llty2, addr_space);
             llvm::LLVMRustSetLinkage(g1, base::linkage_to_llvm(linkage));
 
             // Declare an internal global `extern_with_linkage_foo` which
@@ -137,7 +139,7 @@ fn check_and_apply_linkage(
             // zero.
             let mut real_name = "_rust_extern_with_linkage_".to_string();
             real_name.push_str(&sym);
-            let g2 = cx.define_global(&real_name, llty, cx.flat_addr_space())
+            let g2 = cx.define_global(&real_name, llty, addr_space)
                 .unwrap_or_else(|| {
                     cx.sess().span_fatal(span, &format!("symbol `{}` is already defined", &sym))
                 });
@@ -148,7 +150,7 @@ fn check_and_apply_linkage(
     } else {
         // Generate an external declaration.
         // FIXME(nagisa): investigate whether it can be changed into define_global
-        cx.declare_global(&sym, llty, cx.flat_addr_space())
+        cx.declare_global(&sym, llty, addr_space)
     }
 }
 
@@ -225,6 +227,7 @@ impl CodegenCx<'ll, 'tcx> {
 
         let ty = instance.ty(self.tcx, ty::ParamEnv::reveal_all());
         let sym = self.tcx.symbol_name(instance).name;
+        let cg_attrs = self.tcx.codegen_fn_attrs(def_id);
 
         debug!("get_static: sym={} instance={:?}", sym, instance);
 
@@ -245,6 +248,8 @@ impl CodegenCx<'ll, 'tcx> {
                     } else {
                         self.const_addr_space()
                     };
+                    let addr_space = cg_attrs.addr_space
+                      .unwrap_or(addr_space);
 
                     let g = self.declare_global(sym, llty, addr_space);
 
@@ -258,13 +263,12 @@ impl CodegenCx<'ll, 'tcx> {
                 }
 
                 Node::ForeignItem(&hir::ForeignItem {
-                    ref attrs,
+                    attrs,
                     span,
                     kind: hir::ForeignItemKind::Static(..),
                     ..
                 }) => {
-                    let fn_attrs = self.tcx.codegen_fn_attrs(def_id);
-                    (check_and_apply_linkage(&self, &fn_attrs, ty, sym, span), &**attrs)
+                    (check_and_apply_linkage(&self, &cg_attrs, ty, sym, span), attrs)
                 }
 
                 item => bug!("get_static: expected static, found {:?}", item),
@@ -283,9 +287,8 @@ impl CodegenCx<'ll, 'tcx> {
             // FIXME(nagisa): perhaps the map of externs could be offloaded to llvm somehow?
             debug!("get_static: sym={} item_attr={:?}", sym, self.tcx.item_attrs(def_id));
 
-            let attrs = self.tcx.codegen_fn_attrs(def_id);
             let span = self.tcx.def_span(def_id);
-            let g = check_and_apply_linkage(&self, &attrs, ty, sym, span);
+            let g = check_and_apply_linkage(&self, &cg_attrs, ty, sym, span);
 
             // Thread-local statics in some other crate need to *always* be linked
             // against in a thread-local fashion, so we need to be sure to apply the
@@ -293,7 +296,7 @@ impl CodegenCx<'ll, 'tcx> {
             // don't do this then linker errors can be generated where the linker
             // complains that one object files has a thread local version of the
             // symbol and another one doesn't.
-            if attrs.flags.contains(CodegenFnAttrFlags::THREAD_LOCAL) {
+            if cg_attrs.flags.contains(CodegenFnAttrFlags::THREAD_LOCAL) {
                 llvm::set_thread_local_mode(g, self.tls_model);
             }
 
@@ -405,12 +408,15 @@ impl StaticMethods for CodegenCx<'ll, 'tcx> {
 
                 let linkage = llvm::LLVMRustGetLinkage(g);
                 let visibility = llvm::LLVMRustGetVisibility(g);
+                let attrs = self.tcx.codegen_fn_attrs(def_id);
 
                 let addr_space = if llvm_mutable {
                     self.mutable_addr_space()
                 } else {
                     self.const_addr_space()
                 };
+                let addr_space = attrs.addr_space
+                  .unwrap_or(addr_space);
 
                 let new_g = llvm::LLVMRustGetOrInsertGlobal(
                     self.llmod,

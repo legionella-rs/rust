@@ -440,7 +440,7 @@ pub type LinkArgs = BTreeMap<LinkerFlavor, Vec<String>>;
 pub type TargetResult = Result<Target, String>;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
-#[derive(HashStable_Generic)]
+#[derive(HashStable_Generic, Encodable, Decodable)]
 pub struct AddrSpaceIdx(pub u32);
 impl Default for AddrSpaceIdx {
     #[inline(always)]
@@ -461,7 +461,7 @@ impl FromStr for AddrSpaceIdx {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-#[derive(HashStable_Generic)]
+#[derive(HashStable_Generic, Encodable, Decodable)]
 pub enum AddrSpaceKind {
     Flat,
     Alloca,
@@ -506,6 +506,7 @@ impl ToJson for AddrSpaceKind {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Encodable, Decodable)]
 pub struct AddrSpaceProps {
     pub index: AddrSpaceIdx,
     /// Indicates which addr spaces this addr space can be addrspacecast-ed to.
@@ -552,6 +553,7 @@ impl ToJson for AddrSpaceProps {
     }
 }
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Encodable, Decodable)]
 pub struct AddrSpaces(pub BTreeMap<AddrSpaceKind, AddrSpaceProps>);
 impl Deref for AddrSpaces {
     type Target = BTreeMap<AddrSpaceKind, AddrSpaceProps>;

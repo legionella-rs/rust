@@ -230,6 +230,7 @@ symbols! {
         add_assign,
         add_with_overflow,
         address,
+        address_space,
         advanced_slice_patterns,
         adx_target_feature,
         alias,
