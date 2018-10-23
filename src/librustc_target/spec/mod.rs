@@ -272,7 +272,7 @@ pub enum LoadTargetError {
 pub type LinkArgs = BTreeMap<LinkerFlavor, Vec<String>>;
 pub type TargetResult = Result<Target, String>;
 
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, RustcEncodable, RustcDecodable)]
 pub struct AddrSpaceIdx(pub u32);
 impl Default for AddrSpaceIdx {
     fn default() -> Self {

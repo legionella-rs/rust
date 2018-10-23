@@ -27,7 +27,7 @@ use syntax::attr::{InlineAttr, OptimizeAttr};
 use syntax::symbol::{Symbol, kw};
 use syntax::tokenstream::TokenStream;
 use syntax::util::parser::ExprPrecedence;
-use rustc_target::spec::abi::Abi;
+use rustc_target::spec::{abi::Abi, AddrSpaceIdx, };
 use rustc_data_structures::sync::{par_for_each_in, Send, Sync};
 use rustc_data_structures::thin_vec::ThinVec;
 use rustc_macros::HashStable;
@@ -2706,6 +2706,9 @@ pub struct CodegenFnAttrs {
     /// The `#[link_section = "..."]` attribute, or what executable section this
     /// should be placed in.
     pub link_section: Option<Symbol>,
+    /// The `#[addr_space = "..."]` attribute, or what address space this global
+    /// should be place in. The value names are the same as used in target specs.
+    pub addr_space: Option<AddrSpaceIdx>,
 }
 
 bitflags! {
@@ -2763,6 +2766,7 @@ impl CodegenFnAttrs {
             target_features: vec![],
             linkage: None,
             link_section: None,
+            addr_space: None,
         }
     }
 
@@ -2790,6 +2794,11 @@ impl CodegenFnAttrs {
                 Some(Linkage::Private) => false,
                 Some(_) => true,
             }
+    }
+}
+impl Default for CodegenFnAttrs {
+    fn default() -> Self {
+        CodegenFnAttrs::new()
     }
 }
 

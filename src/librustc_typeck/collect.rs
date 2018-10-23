@@ -30,7 +30,7 @@ use rustc::ty::{self, AdtKind, DefIdTree, ToPolyTraitRef, Ty, TyCtxt, Const};
 use rustc::ty::{ReprOptions, ToPredicate};
 use rustc::util::captures::Captures;
 use rustc::util::nodemap::FxHashMap;
-use rustc_target::spec::abi;
+use rustc_target::spec::{abi, AddrSpaceKind};
 
 use syntax::ast;
 use syntax::ast::{Ident, MetaItemKind};
@@ -47,6 +47,8 @@ use rustc::hir::GenericParamKind;
 use rustc::hir::{self, CodegenFnAttrFlags, CodegenFnAttrs, Unsafety};
 
 use errors::{Applicability, DiagnosticId, StashKey};
+
+use std::str::FromStr;
 
 struct OnlySelfBounds(bool);
 
@@ -2672,6 +2674,16 @@ fn codegen_fn_attrs(tcx: TyCtxt<'_>, id: DefId) -> CodegenFnAttrs {
             }
         } else if attr.check_name(sym::link_name) {
             codegen_fn_attrs.link_name = attr.value_str();
+        } else if attr.check_name(sym::address_space) {
+            if let Some(val) = attr.value_str() {
+                let kind = AddrSpaceKind::from_str(&val.as_str()).unwrap();
+                // resolve the kind to an index:
+                let idx = tcx.sess.target.target.options.addr_spaces
+                    .get(&kind)
+                    .map(|v| v.index )
+                    .unwrap_or_default();
+                codegen_fn_attrs.addr_space = Some(idx);
+            }
         } else if attr.check_name(sym::link_ordinal) {
             link_ordinal_span = Some(attr.span);
             if let ordinal @ Some(_) = check_link_ordinal(tcx, attr) {

@@ -118,6 +118,7 @@ symbols! {
         abi_vectorcall,
         abi_x86_interrupt,
         aborts,
+        address_space,
         advanced_slice_patterns,
         adx_target_feature,
         alias,
