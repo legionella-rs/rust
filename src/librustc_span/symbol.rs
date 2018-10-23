@@ -123,6 +123,7 @@ symbols! {
         abort,
         aborts,
         address,
+        address_space,
         add_with_overflow,
         advanced_slice_patterns,
         adx_target_feature,
