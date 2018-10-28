@@ -773,6 +773,7 @@ pub fn create_global_ctxt<'tcx>(
                 query_result_on_disk_cache,
                 &crate_name,
                 &outputs,
+                None,
             )
         })
     });
