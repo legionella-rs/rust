@@ -1101,6 +1101,11 @@ pub struct GlobalCtxt<'tcx> {
 
     stability_interner: ShardedHashMap<&'tcx attr::Stability, ()>,
 
+    /// Driver specific data. Placed here for mergability.
+    /// Note: This is not allowed to live after `TyCtxt::create_and_enter` returns.
+    driver_data: Option<Box<dyn Any + Send + Sync>>,
+
+
     /// Stores the value of constants (and deduplicates the actual memory)
     allocation_interner: ShardedHashMap<&'tcx Allocation, ()>,
 
@@ -1208,6 +1213,7 @@ impl<'tcx> TyCtxt<'tcx> {
         on_disk_query_result_cache: query::OnDiskCache<'tcx>,
         crate_name: &str,
         output_filenames: &OutputFilenames,
+        driver_data: Option<Box<dyn Any + Send + Sync>>,
     ) -> GlobalCtxt<'tcx> {
         let data_layout = TargetDataLayout::parse(&s.target.target).unwrap_or_else(|err| {
             s.fatal(&err);
@@ -1267,6 +1273,9 @@ impl<'tcx> TyCtxt<'tcx> {
         }
 
         GlobalCtxt {
+            // placed up top for mergability.
+            driver_data,
+
             sess: s,
             cstore,
             arena: WorkerLocal::new(|_| Arena::default()),
@@ -1317,6 +1326,14 @@ impl<'tcx> TyCtxt<'tcx> {
             alloc_map: Lock::new(interpret::AllocMap::new()),
             output_filenames: Arc::new(output_filenames.clone()),
         }
+    }
+
+    pub fn with_driver_data<F, R>(self, f: F) -> Option<R>
+        where F: for<'b> FnOnce(Self, &'b (dyn Any + Send + Sync)) -> R
+    {
+        self.driver_data.as_ref()
+          .map(|v| &**v )
+          .map(move |v| f(self, v) )
     }
 
     pub fn consider_optimizing<T: Fn() -> String>(&self, msg: T) -> bool {
