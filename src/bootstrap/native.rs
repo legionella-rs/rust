@@ -128,6 +128,8 @@ impl Step for Llvm {
 
         let assertions = if builder.config.llvm_assertions {"ON"} else {"OFF"};
 
+        let spirv_tools = builder.src.join("src/tools/spirv-llvm-translator");
+
         cfg.out_dir(&out_dir)
            .profile(profile)
            .define("LLVM_ENABLE_ASSERTIONS", assertions)
@@ -143,7 +145,10 @@ impl Step for Llvm {
            .define("LLVM_ENABLE_LIBEDIT", "OFF")
            .define("LLVM_PARALLEL_COMPILE_JOBS", builder.jobs().to_string())
            .define("LLVM_TARGET_ARCH", target.split('-').next().unwrap())
-           .define("LLVM_DEFAULT_TARGET_TRIPLE", target);
+           .define("LLVM_DEFAULT_TARGET_TRIPLE", target)
+           .define("LLVM_EXTERNAL_PROJECTS", "spirv-llvm-translator")
+           .define("LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_BUILD", "ON")
+           .define("LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR", spirv_tools);
 
         if builder.config.llvm_thin_lto && !emscripten {
             cfg.define("LLVM_ENABLE_LTO", "Thin")

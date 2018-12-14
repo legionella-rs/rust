@@ -204,6 +204,7 @@ const LLVM_TOOLS: &[&str] = &[
     "llvm-readobj", // used to get information from ELFs/objects that the other tools don't provide
     "llvm-size", // used to prints the size of the linker sections of a program
     "llvm-strip", // used to discard symbols from binary files to reduce their size
+    "llvm-spirv", // used to translate LLVM IR into SPIRV
 ];
 
 /// A structure representing a Rust compiler.
