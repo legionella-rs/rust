@@ -112,6 +112,7 @@ symbols! {
         abi_amdgpu_kernel,
         abi_msp430_interrupt,
         abi_ptx,
+        abi_spir_kernel,
         abi_sysv64,
         abi_thiscall,
         abi_unadjusted,
