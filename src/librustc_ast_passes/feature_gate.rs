@@ -121,6 +121,14 @@ impl<'a> PostExpansionVisitor<'a> {
                     "amdgpu-kernel ABI is experimental and subject to change"
                 );
             }
+            "spir-kernel" => {
+                gate_feature_post!(
+                    &self,
+                    abi_spir_kernel,
+                    span,
+                    "spir-kernel ABI is experimental and subject to change"
+                );
+            }
             "efiapi" => {
                 gate_feature_post!(
                     &self,
