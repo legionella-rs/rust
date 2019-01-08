@@ -163,37 +163,39 @@ pub unsafe fn create_module(
     // Ensure the data-layout values hardcoded remain the defaults.
     if sess.target.target.options.is_builtin {
         let tm = crate::back::write::create_informational_target_machine(&tcx.sess, false);
-        llvm::LLVMRustSetDataLayoutFromTargetMachine(llmod, tm);
-        llvm::LLVMRustDisposeTargetMachine(tm);
+        if let Some(tm) = tm {
+            llvm::LLVMRustSetDataLayoutFromTargetMachine(llmod, tm);
+            llvm::LLVMRustDisposeTargetMachine(tm);
 
-        let llvm_data_layout = llvm::LLVMGetDataLayout(llmod);
-        let llvm_data_layout = str::from_utf8(CStr::from_ptr(llvm_data_layout).to_bytes())
-            .ok().expect("got a non-UTF8 data-layout from LLVM");
+            let llvm_data_layout = llvm::LLVMGetDataLayout(llmod);
+            let llvm_data_layout = str::from_utf8(CStr::from_ptr(llvm_data_layout).to_bytes())
+                .ok().expect("got a non-UTF8 data-layout from LLVM");
 
-        // Unfortunately LLVM target specs change over time, and right now we
-        // don't have proper support to work with any more than one
-        // `data_layout` than the one that is in the rust-lang/rust repo. If
-        // this compiler is configured against a custom LLVM, we may have a
-        // differing data layout, even though we should update our own to use
-        // that one.
-        //
-        // As an interim hack, if CFG_LLVM_ROOT is not an empty string then we
-        // disable this check entirely as we may be configured with something
-        // that has a different target layout.
-        //
-        // Unsure if this will actually cause breakage when rustc is configured
-        // as such.
-        //
-        // FIXME(#34960)
-        let cfg_llvm_root = option_env!("CFG_LLVM_ROOT").unwrap_or("");
-        let custom_llvm_used = cfg_llvm_root.trim() != "";
+            // Unfortunately LLVM target specs change over time, and right now we
+            // don't have proper support to work with any more than one
+            // `data_layout` than the one that is in the rust-lang/rust repo. If
+            // this compiler is configured against a custom LLVM, we may have a
+            // differing data layout, even though we should update our own to use
+            // that one.
+            //
+            // As an interim hack, if CFG_LLVM_ROOT is not an empty string then we
+            // disable this check entirely as we may be configured with something
+            // that has a different target layout.
+            //
+            // Unsure if this will actually cause breakage when rustc is configured
+            // as such.
+            //
+            // FIXME(#34960)
+            let cfg_llvm_root = option_env!("CFG_LLVM_ROOT").unwrap_or("");
+            let custom_llvm_used = cfg_llvm_root.trim() != "";
 
-        if !custom_llvm_used && target_data_layout != llvm_data_layout {
-            bug!("data-layout for builtin `{}` target, `{}`, \
+            if !custom_llvm_used && target_data_layout != llvm_data_layout {
+                bug!("data-layout for builtin `{}` target, `{}`, \
                   differs from LLVM default, `{}`",
                  sess.target.target.llvm_target,
                  target_data_layout,
                  llvm_data_layout);
+            }
         }
     }
 

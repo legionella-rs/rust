@@ -543,7 +543,9 @@ pub(crate) fn run_pass_manager(cgcx: &CodegenContext<LlvmCodegenBackend>,
     debug!("running the pass manager");
     unsafe {
         let pm = llvm::LLVMCreatePassManager();
-        llvm::LLVMRustAddAnalysisPasses(module.module_llvm.tm, pm, module.module_llvm.llmod());
+        if let Some(tm) = module.module_llvm.tm() {
+            llvm::LLVMRustAddAnalysisPasses(tm, pm, module.module_llvm.llmod());
+        }
 
         if config.verify_llvm_ir {
             let pass = llvm::LLVMRustFindAndCreatePass("verify\0".as_ptr().cast());
@@ -677,9 +679,13 @@ pub unsafe fn optimize_thin_module(
     cgcx: &CodegenContext<LlvmCodegenBackend>,
 ) -> Result<ModuleCodegen<ModuleLlvm>, FatalError> {
     let diag_handler = cgcx.create_diag_handler();
-    let tm = (cgcx.tm_factory.0)().map_err(|e| {
-        write::llvm_err(&diag_handler, &e)
-    })?;
+    let tm = match (cgcx.tm_factory.0)() {
+        Ok(tm) => Some(tm),
+        Err(_) if !cgcx.require_tm => None,
+        Err(e) => {
+            return Err(write::llvm_err(&diag_handler, &e));
+        },
+    };
 
     // Right now the implementation we've got only works over serialized
     // modules, so we create a fresh new LLVM context and parse the module
