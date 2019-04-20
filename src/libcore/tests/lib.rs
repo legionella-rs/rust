@@ -13,7 +13,7 @@
 #![feature(iter_copied)]
 #![feature(iter_nth_back)]
 #![feature(iter_once_with)]
-#![feature(pattern)]
+#![feature(needle)]
 #![feature(range_is_empty)]
 #![feature(raw)]
 #![feature(slice_patterns)]

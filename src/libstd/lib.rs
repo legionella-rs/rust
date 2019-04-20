@@ -274,6 +274,7 @@
 #![feature(link_args)]
 #![feature(linkage)]
 #![feature(maybe_uninit)]
+#![feature(needle)]
 #![feature(needs_panic_runtime)]
 #![feature(never_type)]
 #![feature(nll)]
@@ -285,6 +286,7 @@
 #![feature(panic_unwind)]
 #![feature(prelude_import)]
 #![feature(ptr_internals)]
+#![feature(ptr_offset_from)]
 #![feature(raw)]
 #![feature(renamed_spin_loop)]
 #![feature(rustc_attrs)]
@@ -293,6 +295,7 @@
 #![feature(shrink_to)]
 #![feature(slice_concat_ext)]
 #![feature(slice_internals)]
+#![feature(slice_needle_methods)]
 #![feature(slice_patterns)]
 #![feature(staged_api)]
 #![feature(std_internals)]
@@ -436,6 +439,8 @@ pub use core::char;
 pub use core::u128;
 #[stable(feature = "core_hint", since = "1.27.0")]
 pub use core::hint;
+#[unstable(feature = "needle", issue = "56345")]
+pub use core::needle;
 
 pub mod f32;
 pub mod f64;

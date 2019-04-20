@@ -6,18 +6,22 @@ use crate::ffi::{OsStr, OsString};
 use crate::fmt;
 use crate::str;
 use crate::mem;
+use crate::ops::{Index, Range, RangeFrom, RangeTo};
 use crate::rc::Rc;
 use crate::sync::Arc;
 use crate::sys_common::{FromInner, IntoInner, AsInner};
 use crate::sys_common::bytestring::debug_fmt_bytestring;
 
 use core::str::lossy::Utf8Lossy;
+use core::slice::needles::{SliceSearcher, NaiveSearcher};
+use crate::needle::Hay;
 
 #[derive(Clone, Hash)]
 pub(crate) struct Buf {
     pub inner: Vec<u8>
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct Slice {
     pub inner: [u8]
 }
@@ -31,6 +35,30 @@ impl fmt::Debug for Slice {
 impl fmt::Display for Slice {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&Utf8Lossy::from_bytes(&self.inner), formatter)
+    }
+}
+
+impl Index<Range<usize>> for Slice {
+    type Output = Slice;
+
+    fn index(&self, range: Range<usize>) -> &Slice {
+        Slice::from_u8_slice(&self.inner[range])
+    }
+}
+
+impl Index<RangeFrom<usize>> for Slice {
+    type Output = Slice;
+
+    fn index(&self, range: RangeFrom<usize>) -> &Slice {
+        Slice::from_u8_slice(&self.inner[range])
+    }
+}
+
+impl Index<RangeTo<usize>> for Slice {
+    type Output = Slice;
+
+    fn index(&self, range: RangeTo<usize>) -> &Slice {
+        Slice::from_u8_slice(&self.inner[range])
     }
 }
 
@@ -178,7 +206,30 @@ impl Slice {
         let rc: Rc<[u8]> = Rc::from(&self.inner);
         unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Slice) }
     }
+
+    pub unsafe fn next_index(&self, index: usize) -> usize {
+        self.inner.next_index(index)
+    }
+
+    pub unsafe fn prev_index(&self, index: usize) -> usize {
+        self.inner.prev_index(index)
+    }
+
+    pub fn into_searcher(&self) -> SliceSearcher<'_, u8> {
+        SliceSearcher::new(&self.inner)
+    }
+
+    pub fn into_consumer(&self) -> NaiveSearcher<'_, u8> {
+        NaiveSearcher::new(&self.inner)
+    }
+
+    pub fn as_bytes_for_searcher(&self) -> &[u8] {
+        &self.inner
+    }
 }
+
+#[unstable(feature = "needle", issue = "56345")]
+pub type InnerSearcher<S> = S;
 
 /// Platform-specific extensions to [`OsString`].
 ///

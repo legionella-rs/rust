@@ -5,6 +5,7 @@ use std::panic;
 use std::rc::Rc;
 use std::sync::atomic::{Ordering::Relaxed, AtomicUsize};
 use std::thread;
+use std::f64::NAN;
 
 use rand::{Rng, RngCore, thread_rng};
 use rand::seq::SliceRandom;
@@ -844,19 +845,19 @@ fn test_splitator() {
     let xs = &[1, 2, 3, 4, 5];
 
     let splits: &[&[_]] = &[&[1], &[3], &[5]];
-    assert_eq!(xs.split(|x| *x % 2 == 0).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x % 2 == 0).collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[], &[2, 3, 4, 5]];
-    assert_eq!(xs.split(|x| *x == 1).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x == 1).collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[1, 2, 3, 4], &[]];
-    assert_eq!(xs.split(|x| *x == 5).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x == 5).collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[1, 2, 3, 4, 5]];
-    assert_eq!(xs.split(|x| *x == 10).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x == 10).collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[], &[], &[], &[], &[], &[]];
-    assert_eq!(xs.split(|_| true).collect::<Vec<&[i32]>>(), splits);
+    assert_eq!(xs.split(|_: &i32| true).collect::<Vec<&[i32]>>(), splits);
 
     let xs: &[i32] = &[];
     let splits: &[&[i32]] = &[&[]];
-    assert_eq!(xs.split(|x| *x == 5).collect::<Vec<&[i32]>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x == 5).collect::<Vec<&[i32]>>(), splits);
 }
 
 #[test]
@@ -864,15 +865,15 @@ fn test_splitnator() {
     let xs = &[1, 2, 3, 4, 5];
 
     let splits: &[&[_]] = &[&[1, 2, 3, 4, 5]];
-    assert_eq!(xs.splitn(1, |x| *x % 2 == 0).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.splitn(1, |x: &i32| *x % 2 == 0).collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[1], &[3, 4, 5]];
-    assert_eq!(xs.splitn(2, |x| *x % 2 == 0).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.splitn(2, |x: &i32| *x % 2 == 0).collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[], &[], &[], &[4, 5]];
-    assert_eq!(xs.splitn(4, |_| true).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.splitn(4, |_: &i32| true).collect::<Vec<_>>(), splits);
 
     let xs: &[i32] = &[];
     let splits: &[&[i32]] = &[&[]];
-    assert_eq!(xs.splitn(2, |x| *x == 5).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.splitn(2, |x: &i32| *x == 5).collect::<Vec<_>>(), splits);
 }
 
 #[test]
@@ -880,17 +881,17 @@ fn test_splitnator_mut() {
     let xs = &mut [1, 2, 3, 4, 5];
 
     let splits: &[&mut [_]] = &[&mut [1, 2, 3, 4, 5]];
-    assert_eq!(xs.splitn_mut(1, |x| *x % 2 == 0).collect::<Vec<_>>(),
+    assert_eq!(xs.splitn_mut(1, |x: &i32| *x % 2 == 0).collect::<Vec<_>>(),
                splits);
     let splits: &[&mut [_]] = &[&mut [1], &mut [3, 4, 5]];
-    assert_eq!(xs.splitn_mut(2, |x| *x % 2 == 0).collect::<Vec<_>>(),
+    assert_eq!(xs.splitn_mut(2, |x: &i32| *x % 2 == 0).collect::<Vec<_>>(),
                splits);
     let splits: &[&mut [_]] = &[&mut [], &mut [], &mut [], &mut [4, 5]];
-    assert_eq!(xs.splitn_mut(4, |_| true).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.splitn_mut(4, |_: &i32| true).collect::<Vec<_>>(), splits);
 
     let xs: &mut [i32] = &mut [];
     let splits: &[&mut [i32]] = &[&mut []];
-    assert_eq!(xs.splitn_mut(2, |x| *x == 5).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.splitn_mut(2, |x: &i32| *x == 5).collect::<Vec<_>>(), splits);
 }
 
 #[test]
@@ -898,17 +899,17 @@ fn test_rsplitator() {
     let xs = &[1, 2, 3, 4, 5];
 
     let splits: &[&[_]] = &[&[5], &[3], &[1]];
-    assert_eq!(xs.split(|x| *x % 2 == 0).rev().collect::<Vec<_>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x % 2 == 0).rev().collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[2, 3, 4, 5], &[]];
-    assert_eq!(xs.split(|x| *x == 1).rev().collect::<Vec<_>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x == 1).rev().collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[], &[1, 2, 3, 4]];
-    assert_eq!(xs.split(|x| *x == 5).rev().collect::<Vec<_>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x == 5).rev().collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[1, 2, 3, 4, 5]];
-    assert_eq!(xs.split(|x| *x == 10).rev().collect::<Vec<_>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x == 10).rev().collect::<Vec<_>>(), splits);
 
     let xs: &[i32] = &[];
     let splits: &[&[i32]] = &[&[]];
-    assert_eq!(xs.split(|x| *x == 5).rev().collect::<Vec<&[i32]>>(), splits);
+    assert_eq!(xs.split(|x: &i32| *x == 5).rev().collect::<Vec<&[i32]>>(), splits);
 }
 
 #[test]
@@ -916,16 +917,16 @@ fn test_rsplitnator() {
     let xs = &[1, 2, 3, 4, 5];
 
     let splits: &[&[_]] = &[&[1, 2, 3, 4, 5]];
-    assert_eq!(xs.rsplitn(1, |x| *x % 2 == 0).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.rsplitn(1, |x: &i32| *x % 2 == 0).collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[5], &[1, 2, 3]];
-    assert_eq!(xs.rsplitn(2, |x| *x % 2 == 0).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.rsplitn(2, |x: &i32| *x % 2 == 0).collect::<Vec<_>>(), splits);
     let splits: &[&[_]] = &[&[], &[], &[], &[1, 2]];
-    assert_eq!(xs.rsplitn(4, |_| true).collect::<Vec<_>>(), splits);
+    assert_eq!(xs.rsplitn(4, |_: &i32| true).collect::<Vec<_>>(), splits);
 
     let xs: &[i32] = &[];
     let splits: &[&[i32]] = &[&[]];
-    assert_eq!(xs.rsplitn(2, |x| *x == 5).collect::<Vec<&[i32]>>(), splits);
-    assert!(xs.rsplitn(0, |x| *x % 2 == 0).next().is_none());
+    assert_eq!(xs.rsplitn(2, |x: &i32| *x == 5).collect::<Vec<&[i32]>>(), splits);
+    assert!(xs.rsplitn(0, |x: &i32| *x % 2 == 0).next().is_none());
 }
 
 #[test]
@@ -1218,14 +1219,14 @@ fn test_ends_with() {
 #[test]
 fn test_mut_splitator() {
     let mut xs = [0, 1, 0, 2, 3, 0, 0, 4, 5, 0];
-    assert_eq!(xs.split_mut(|x| *x == 0).count(), 6);
-    for slice in xs.split_mut(|x| *x == 0) {
+    assert_eq!(xs.split_mut(|x: &i32| *x == 0).count(), 6);
+    for slice in xs.split_mut(|x: &i32| *x == 0) {
         slice.reverse();
     }
     assert!(xs == [0, 1, 0, 3, 2, 0, 0, 5, 4, 0]);
 
     let mut xs = [0, 1, 0, 2, 3, 0, 0, 4, 5, 0, 6, 7];
-    for slice in xs.split_mut(|x| *x == 0).take(5) {
+    for slice in xs.split_mut(|x: &i32| *x == 0).take(5) {
         slice.reverse();
     }
     assert!(xs == [0, 1, 0, 3, 2, 0, 0, 5, 4, 0, 6, 7]);
@@ -1234,7 +1235,7 @@ fn test_mut_splitator() {
 #[test]
 fn test_mut_splitator_rev() {
     let mut xs = [1, 2, 0, 3, 4, 0, 0, 5, 6, 0];
-    for slice in xs.split_mut(|x| *x == 0).rev().take(4) {
+    for slice in xs.split_mut(|x: &i32| *x == 0).rev().take(4) {
         slice.reverse();
     }
     assert!(xs == [1, 2, 0, 4, 3, 0, 0, 6, 5, 0]);
@@ -1654,4 +1655,64 @@ fn repeat_generic_slice() {
         [1, 2, 3, 4].repeat(3),
         vec![1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]
     );
+}
+
+#[test]
+fn test_match_indices_simple() {
+    let haystack = &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 2.0, 3.0, 2.0, 4.0, 8.0][..];
+    let needle = &[2.0, 3.0][..];
+
+    assert_eq!(haystack.match_indices(needle).collect::<Vec<_>>(), vec![
+        (1, needle),
+        (8, needle),
+    ]);
+}
+
+#[test]
+fn test_match_indices_nan_haystack() {
+    let haystack = &[1.0, 2.0, NAN, 1.0, 2.0, NAN, 1.0, NAN, NAN, NAN, 2.0, 1.0, 2.0][..];
+    let needle = &[1.0, 2.0][..];
+
+    assert_eq!(haystack.match_indices(needle).collect::<Vec<_>>(), vec![
+        (0, needle),
+        (3, needle),
+        (11, needle),
+    ]);
+}
+
+#[test]
+fn test_match_indices_nan_needle() {
+    let haystack = &[1.0, 2.0, NAN, 1.0, 2.0, NAN, 1.0, NAN, NAN, NAN, 2.0, 1.0, 2.0][..];
+    let needle = &[2.0, NAN][..];
+
+    assert_eq!(haystack.match_indices(needle).collect::<Vec<_>>(), vec![
+    ]);
+}
+
+#[test]
+fn test_match_indices_negative_zero() {
+    let haystack = &[-0.0, 0.0, 0.0, -0.0, 0.0][..];
+    let needle = &[0.0, -0.0][..];
+
+    assert_eq!(haystack.match_indices(needle).collect::<Vec<_>>(), vec![
+        (0, needle),
+        (2, needle),
+    ]);
+}
+
+#[test]
+fn test_replace() {
+    let haystack = &b" empowering everyone to build reliable and efficient software."[..];
+
+    assert_eq!(
+        haystack.replace(&b" e"[..], b" **E**"),
+        b" **E**mpowering **E**veryone to build reliable and **E**fficient software.".to_vec()
+    );
+}
+
+#[test]
+fn test_boxed_slice_ref_is_a_needle() {
+    let boundary = vec![b'x'; 12].into_boxed_slice();
+    let bytes: &[u8] = b"--xxxxxxxxxxxxyyyy";
+    assert!(bytes[2..].starts_with(&boundary));
 }

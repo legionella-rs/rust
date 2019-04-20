@@ -5,9 +5,15 @@ use crate::cmp;
 use crate::hash::{Hash, Hasher};
 use crate::rc::Rc;
 use crate::sync::Arc;
+use crate::needle::{
+    ext, Hay, Haystack, Needle, Span, Searcher, ReverseSearcher,
+    Consumer, ReverseConsumer, DoubleEndedConsumer,
+};
 
-use crate::sys::os_str::{Buf, Slice};
+use crate::sys::os_str::{Buf, InnerSearcher, Slice};
 use crate::sys_common::{AsInner, IntoInner, FromInner};
+
+use core::slice::needles::{TwoWaySearcher, SliceSearcher, NaiveSearcher};
 
 /// A type that can represent owned, mutable platform-native strings, but is
 /// cheaply inter-convertible with Rust strings.
@@ -373,6 +379,36 @@ impl ops::Index<ops::RangeFull> for OsString {
     }
 }
 
+#[stable(feature = "os_str_slice", since = "1.36.0")]
+impl ops::Index<ops::Range<usize>> for OsString {
+    type Output = OsStr;
+
+    #[inline]
+    fn index(&self, index: ops::Range<usize>) -> &OsStr {
+        OsStr::from_inner(&self.inner.as_slice()[index])
+    }
+}
+
+#[stable(feature = "os_str_slice", since = "1.36.0")]
+impl ops::Index<ops::RangeFrom<usize>> for OsString {
+    type Output = OsStr;
+
+    #[inline]
+    fn index(&self, index: ops::RangeFrom<usize>) -> &OsStr {
+        OsStr::from_inner(&self.inner.as_slice()[index])
+    }
+}
+
+#[stable(feature = "os_str_slice", since = "1.36.0")]
+impl ops::Index<ops::RangeTo<usize>> for OsString {
+    type Output = OsStr;
+
+    #[inline]
+    fn index(&self, index: ops::RangeTo<usize>) -> &OsStr {
+        OsStr::from_inner(&self.inner.as_slice()[index])
+    }
+}
+
 #[stable(feature = "rust1", since = "1.0.0")]
 impl ops::Deref for OsString {
     type Target = OsStr;
@@ -646,12 +682,324 @@ impl OsStr {
         OsString { inner: Buf::from_box(boxed) }
     }
 
-    /// Gets the underlying byte representation.
+    /// Returns `true` if the given needle matches a prefix of this `OsStr`.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn starts_with<'a, P>(&'a self, needle: P) -> bool
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::starts_with(self, needle)
+    }
+
+    /// Returns `true` if the given needle matches a suffix of this `OsStr`.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn ends_with<'a, P>(&'a self, needle: P) -> bool
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: ReverseConsumer<OsStr>,
+    {
+        ext::ends_with(self, needle)
+    }
+
+    /// Returns `true` if the given needle matches a sub-slice of this `OsStr`.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn contains<'a, P>(&'a self, needle: P) -> bool
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::contains(self, needle)
+    }
+
+    /// Returns the start index of first slice of this `OsStr` that matches the
+    /// needle.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn find<'a, P>(&'a self, needle: P) -> Option<usize>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::find(self, needle)
+    }
+
+    /// Returns the start index of last slice of this `OsStr` that matches the
+    /// needle.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn rfind<'a, P>(&'a self, needle: P) -> Option<usize>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: ReverseSearcher<OsStr>,
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::rfind(self, needle)
+    }
+
+    /// Returns the index range of first slice of this `OsStr` that matches the
+    /// needle.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn find_range<'a, P>(&'a self, needle: P) -> Option<ops::Range<usize>>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::find_range(self, needle)
+    }
+
+    /// Returns the start index of last slice of this `OsStr` that matches the
+    /// needle.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn rfind_range<'a, P>(&'a self, needle: P) -> Option<ops::Range<usize>>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: ReverseSearcher<OsStr>,
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::rfind_range(self, needle)
+    }
+
+    /// Returns an `OsStr` slice with all prefixes that match the needle
+    /// repeatedly removed.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn trim_start_matches<'a, P>(&'a self, needle: P) -> &'a OsStr
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::trim_start(self, needle)
+    }
+
+    /// Returns an `OsStr` slice with all suffixes that match the needle
+    /// repeatedly removed.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn trim_end_matches<'a, P>(&'a self, needle: P) -> &'a OsStr
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: ReverseConsumer<OsStr>,
+    {
+        ext::trim_end(self, needle)
+    }
+
+    /// Returns an `OsStr` slice with all prefixes and suffixes that match the
+    /// needle repeatedly removed.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn trim_matches<'a, P>(&'a self, needle: P) -> &'a OsStr
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: DoubleEndedConsumer<OsStr>,
+    {
+        ext::trim(self, needle)
+    }
+
+    /// An iterator over the disjoint matches of the needle within the given
+    /// `OsStr`.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn matches<'a, P>(&'a self, needle: P) -> ext::Matches<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::matches(self, needle)
+    }
+
+    /// An iterator over the disjoint matches of the needle within the given
+    /// `OsStr`, yielded in reverse order.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn rmatches<'a, P>(&'a self, needle: P) -> ext::RMatches<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: ReverseSearcher<OsStr>,
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::rmatches(self, needle)
+    }
+
+    /// An iterator over the disjoint matches of a needle within this `OsStr`
+    /// as well as the index that the match starts at.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn match_indices<'a, P>(&'a self, needle: P) -> ext::MatchIndices<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::match_indices(self, needle)
+    }
+
+    /// An iterator over the disjoint matches of a needle within this `OsStr`,
+    /// yielded in reverse order along with the index of the match.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn rmatch_indices<'a, P>(&'a self, needle: P) -> ext::RMatchIndices<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: ReverseSearcher<OsStr>,
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::rmatch_indices(self, needle)
+    }
+
+    /// An iterator over the disjoint matches of a needle within this `OsStr`
+    /// as well as the index ranges of each match.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn match_ranges<'a, P>(&'a self, needle: P) -> ext::MatchRanges<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::match_ranges(self, needle)
+    }
+
+    /// An iterator over the disjoint matches of a needle within this `OsStr`,
+    /// yielded in reverse order along with the index ranges of each match.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn rmatch_ranges<'a, P>(&'a self, needle: P) -> ext::RMatchRanges<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: ReverseSearcher<OsStr>,
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::rmatch_ranges(self, needle)
+    }
+
+    /// An iterator over slices of this `OsStr`, separated by parts matched by
+    /// the needle.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn split<'a, P>(&'a self, needle: P) -> ext::Split<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::split(self, needle)
+    }
+
+    /// An iterator over slices of this `OsStr`, separated by parts matched by
+    /// the needle and yielded in reverse order.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn rsplit<'a, P>(&'a self, needle: P) -> ext::RSplit<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: ReverseSearcher<OsStr>,
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::rsplit(self, needle)
+    }
+
+    /// An iterator over slices of this `OsStr`, separated by parts matched by
+    /// the needle.
     ///
-    /// Note: it is *crucial* that this API is private, to avoid
-    /// revealing the internal, platform-specific encodings.
-    fn bytes(&self) -> &[u8] {
-        unsafe { &*(&self.inner as *const _ as *const [u8]) }
+    /// Equivalent to [`split`](#method.split), except that the trailing slice
+    /// is skipped if empty.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn split_terminator<'a, P>(&'a self, needle: P)
+        -> ext::SplitTerminator<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::split_terminator(self, needle)
+    }
+
+    /// An iterator over slices of this `OsStr`, separated by parts matched by
+    /// the needle and yielded in reverse order.
+    ///
+    /// Equivalent to [`rsplit`](#method.rsplit), except that the trailing slice
+    /// is skipped if empty.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn rsplit_terminator<'a, P>(&'a self, needle: P)
+        -> ext::RSplitTerminator<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: ReverseSearcher<OsStr>,
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::rsplit_terminator(self, needle)
+    }
+
+    /// An iterator over slices of the given `OsStr`, separated by a needle,
+    /// restricted to returning at most `n` items.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn splitn<'a, P>(&'a self, n: usize, needle: P) -> ext::SplitN<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::splitn(self, n, needle)
+    }
+
+    /// An iterator over slices of the given `OsStr`, separated by a needle,
+    /// starting from the end of the `OsStr`, restricted to returning at most
+    /// `n` items.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn rsplitn<'a, P>(&'a self, n: usize, needle: P) -> ext::RSplitN<&'a OsStr, P::Searcher>
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: ReverseSearcher<OsStr>,
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        ext::rsplitn(self, n, needle)
+    }
+
+    /// Replaces all matches of a needle with another `OsStr`.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn replace<'s: 'a, 'a, P>(&'s self, from: P, to: &'a OsStr) -> OsString
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        let mut result = OsString::with_capacity(self.len());
+        ext::replace_with(self, from, |_| to, |s| result.push(s));
+        result
+    }
+
+    /// Replaces first N matches of a needle with another `OsStr`.
+    #[unstable(feature = "os_str_needle_methods", issue = "56345")]
+    #[inline]
+    pub fn replacen<'s: 'a, 'a, P>(&'s self, from: P, to: &'a OsStr, count: usize) -> OsString
+    where
+        P: Needle<&'a OsStr>,
+        P::Searcher: Searcher<OsStr>, // FIXME: RFC 2089
+        P::Consumer: Consumer<OsStr>, // FIXME: RFC 2089
+    {
+        let mut result = OsString::with_capacity(self.len());
+        ext::replacen_with(self, from, |_| to, count, |s| result.push(s));
+        result
     }
 }
 
@@ -789,7 +1137,7 @@ impl Default for &OsStr {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl PartialEq for OsStr {
     fn eq(&self, other: &OsStr) -> bool {
-        self.bytes().eq(other.bytes())
+        self.inner == other.inner
     }
 }
 
@@ -814,16 +1162,16 @@ impl Eq for OsStr {}
 impl PartialOrd for OsStr {
     #[inline]
     fn partial_cmp(&self, other: &OsStr) -> Option<cmp::Ordering> {
-        self.bytes().partial_cmp(other.bytes())
+        self.inner.partial_cmp(&other.inner)
     }
     #[inline]
-    fn lt(&self, other: &OsStr) -> bool { self.bytes().lt(other.bytes()) }
+    fn lt(&self, other: &OsStr) -> bool { self.inner < other.inner }
     #[inline]
-    fn le(&self, other: &OsStr) -> bool { self.bytes().le(other.bytes()) }
+    fn le(&self, other: &OsStr) -> bool { self.inner <= other.inner }
     #[inline]
-    fn gt(&self, other: &OsStr) -> bool { self.bytes().gt(other.bytes()) }
+    fn gt(&self, other: &OsStr) -> bool { self.inner > other.inner }
     #[inline]
-    fn ge(&self, other: &OsStr) -> bool { self.bytes().ge(other.bytes()) }
+    fn ge(&self, other: &OsStr) -> bool { self.inner >= other.inner }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -840,7 +1188,7 @@ impl PartialOrd<str> for OsStr {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl Ord for OsStr {
     #[inline]
-    fn cmp(&self, other: &OsStr) -> cmp::Ordering { self.bytes().cmp(other.bytes()) }
+    fn cmp(&self, other: &OsStr) -> cmp::Ordering { self.inner.cmp(&other.inner) }
 }
 
 macro_rules! impl_cmp {
@@ -885,7 +1233,7 @@ impl_cmp!(Cow<'a, OsStr>, OsString);
 impl Hash for OsStr {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.bytes().hash(state)
+        self.inner.hash(state)
     }
 }
 
@@ -963,6 +1311,46 @@ impl AsInner<Slice> for OsStr {
     #[inline]
     fn as_inner(&self) -> &Slice {
         &self.inner
+    }
+}
+
+#[stable(feature = "os_str_slice", since = "1.36.0")]
+impl ops::Index<ops::RangeFull> for OsStr {
+    type Output = OsStr;
+
+    #[inline]
+    fn index(&self, _: ops::RangeFull) -> &OsStr {
+        self
+    }
+}
+
+#[stable(feature = "os_str_slice", since = "1.36.0")]
+impl ops::Index<ops::Range<usize>> for OsStr {
+    type Output = OsStr;
+
+    #[inline]
+    fn index(&self, index: ops::Range<usize>) -> &OsStr {
+        OsStr::from_inner(&self.inner[index])
+    }
+}
+
+#[stable(feature = "os_str_slice", since = "1.36.0")]
+impl ops::Index<ops::RangeFrom<usize>> for OsStr {
+    type Output = OsStr;
+
+    #[inline]
+    fn index(&self, index: ops::RangeFrom<usize>) -> &OsStr {
+        OsStr::from_inner(&self.inner[index])
+    }
+}
+
+#[stable(feature = "os_str_slice", since = "1.36.0")]
+impl ops::Index<ops::RangeTo<usize>> for OsStr {
+    type Output = OsStr;
+
+    #[inline]
+    fn index(&self, index: ops::RangeTo<usize>) -> &OsStr {
+        OsStr::from_inner(&self.inner[index])
     }
 }
 
@@ -1133,4 +1521,408 @@ mod tests {
         assert_eq!(&*rc2, os_str);
         assert_eq!(&*arc2, os_str);
     }
+
+    #[test]
+    fn slice_with_utf8_boundary() {
+        let os_str = OsStr::new("Hello🌍🌎🌏");
+        assert_eq!(os_str.len(), 17);
+
+        assert_eq!(os_str, &os_str[..]);
+        assert_eq!(os_str, &os_str[..17]);
+        assert_eq!(os_str, &os_str[0..]);
+        assert_eq!(os_str, &os_str[0..17]);
+
+        assert_eq!(OsStr::new("Hello"), &os_str[..5]);
+        assert_eq!(OsStr::new("🌎🌏"), &os_str[9..]);
+        assert_eq!(OsStr::new("lo🌍"), &os_str[3..9]);
+
+        let os_string = os_str.to_owned();
+        assert_eq!(os_str, &os_string[..]);
+        assert_eq!(os_str, &os_string[..17]);
+        assert_eq!(os_str, &os_string[0..]);
+        assert_eq!(os_str, &os_string[0..17]);
+
+        assert_eq!(OsStr::new("Hello"), &os_string[..5]);
+        assert_eq!(OsStr::new("🌎🌏"), &os_string[9..]);
+        assert_eq!(OsStr::new("lo🌍"), &os_string[3..9]);
+    }
+
+    #[test]
+    #[cfg(any(unix, target_os = "redox", target_arch = "wasm32"))]
+    fn slice_with_non_utf8_boundary_unix() {
+        #[cfg(unix)]
+        use crate::os::unix::ffi::OsStrExt;
+        #[cfg(target_os = "redox")]
+        use crate::os::redox::ffi::OsStrExt;
+
+        let os_str = OsStr::new("Hello🌍🌎🌏");
+        assert_eq!(OsStr::from_bytes(b"Hello\xf0"), &os_str[..6]);
+        assert_eq!(OsStr::from_bytes(b"\x9f\x8c\x8e\xf0\x9f\x8c\x8f"), &os_str[10..]);
+        assert_eq!(OsStr::from_bytes(b"\x8d\xf0\x9f\x8c\x8e"), &os_str[8..13]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn slice_with_non_utf8_boundary_windows() {
+        use crate::os::windows::ffi::OsStringExt;
+
+        let os_str = OsStr::new("Hello🌍🌎🌏");
+        assert_eq!(OsString::from_wide(&[0x48, 0x65, 0x6C, 0x6C, 0x6F, 0xD83C]), &os_str[..7]);
+        assert_eq!(OsString::from_wide(&[0xDF0E, 0xD83C, 0xDF0F]), &os_str[11..]);
+        assert_eq!(OsString::from_wide(&[0xDF0D, 0xD83C]), &os_str[7..11]);
+    }
 }
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl Hay for OsStr {
+    type Index = usize;
+
+    #[inline]
+    fn empty<'a>() -> &'a Self {
+        Self::new("")
+    }
+
+    #[inline]
+    fn start_index(&self) -> usize {
+        0
+    }
+
+    #[inline]
+    fn end_index(&self) -> usize {
+        self.len()
+    }
+
+    #[inline]
+    unsafe fn slice_unchecked(&self, range: ops::Range<usize>) -> &Self {
+        &self[range]
+    }
+
+    #[inline]
+    unsafe fn next_index(&self, index: usize) -> usize {
+        self.inner.next_index(index)
+    }
+
+    #[inline]
+    unsafe fn prev_index(&self, index: usize) -> usize {
+        self.inner.prev_index(index)
+    }
+}
+
+// use a macro here since the type of `hay.inner.inner` is platform dependent
+// and we don't want to expose that type.
+macro_rules! span_as_inner {
+    ($span:expr) => {{
+        let (hay, range) = $span.into_parts();
+        unsafe { Span::from_parts(&hay.inner.inner, range) }
+    }}
+}
+
+fn span_as_inner_bytes(span: Span<&OsStr>) -> Span<&[u8]> {
+    let (hay, range) = span.into_parts();
+    unsafe { Span::from_parts(hay.inner.as_bytes_for_searcher(), range) }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl<'p> Searcher<OsStr> for TwoWaySearcher<'p, u8> {
+    #[inline]
+    fn search(&mut self, span: Span<&OsStr>) -> Option<ops::Range<usize>> {
+        self.search(span_as_inner_bytes(span))
+    }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl<'p> ReverseSearcher<OsStr> for TwoWaySearcher<'p, u8> {
+    #[inline]
+    fn rsearch(&mut self, span: Span<&OsStr>) -> Option<ops::Range<usize>> {
+        self.rsearch(span_as_inner_bytes(span))
+    }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl<'p> Consumer<OsStr> for NaiveSearcher<'p, u8> {
+    #[inline]
+    fn consume(&mut self, span: Span<&OsStr>) -> Option<usize> {
+        self.consume(span_as_inner_bytes(span))
+    }
+
+    #[inline]
+    fn trim_start(&mut self, hay: &OsStr) -> usize {
+        self.trim_start(hay.inner.as_bytes_for_searcher())
+    }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl<'p> ReverseConsumer<OsStr> for NaiveSearcher<'p, u8> {
+    #[inline]
+    fn rconsume(&mut self, span: Span<&OsStr>) -> Option<usize> {
+        self.rconsume(span_as_inner_bytes(span))
+    }
+
+    #[inline]
+    fn trim_end(&mut self, hay: &OsStr) -> usize {
+        self.trim_end(hay.inner.as_bytes_for_searcher())
+    }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+#[derive(Debug)]
+pub struct OsStrSearcher<S>(InnerSearcher<S>);
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl<'p> Searcher<OsStr> for OsStrSearcher<SliceSearcher<'p, u8>> {
+    #[inline]
+    fn search(&mut self, span: Span<&OsStr>) -> Option<ops::Range<usize>> {
+        self.0.search(span_as_inner!(span))
+    }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl<'p> ReverseSearcher<OsStr> for OsStrSearcher<SliceSearcher<'p, u8>> {
+    #[inline]
+    fn rsearch(&mut self, span: Span<&OsStr>) -> Option<ops::Range<usize>> {
+        self.0.rsearch(span_as_inner!(span))
+    }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl<'p> Consumer<OsStr> for OsStrSearcher<NaiveSearcher<'p, u8>> {
+    #[inline]
+    fn consume(&mut self, span: Span<&OsStr>) -> Option<usize> {
+        self.0.consume(span_as_inner!(span))
+    }
+
+    #[inline]
+    fn trim_start(&mut self, hay: &OsStr) -> usize {
+        self.0.trim_start(&hay.inner.inner)
+    }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+unsafe impl<'p> ReverseConsumer<OsStr> for OsStrSearcher<NaiveSearcher<'p, u8>> {
+    #[inline]
+    fn rconsume(&mut self, span: Span<&OsStr>) -> Option<usize> {
+        self.0.rconsume(span_as_inner!(span))
+    }
+
+    #[inline]
+    fn trim_end(&mut self, hay: &OsStr) -> usize {
+        self.0.trim_end(&hay.inner.inner)
+    }
+}
+
+#[unstable(feature = "needle", issue = "56345")]
+impl<'p, H: Haystack<Target = OsStr>> Needle<H> for &'p OsStr {
+    type Searcher = OsStrSearcher<SliceSearcher<'p, u8>>;
+    type Consumer = OsStrSearcher<NaiveSearcher<'p, u8>>;
+
+    fn into_searcher(self) -> Self::Searcher {
+        OsStrSearcher(self.inner.into_searcher())
+    }
+
+    fn into_consumer(self) -> Self::Consumer {
+        OsStrSearcher(self.inner.into_consumer())
+    }
+}
+
+// FIXME cannot impl `Needle<(_: Haystack<Target = OsStr>)>` due to RFC 1672 being postponed.
+// (need to wait for chalk)
+#[unstable(feature = "needle", issue = "56345")]
+impl<'h, 'p> Needle<&'h OsStr> for &'p str {
+    type Searcher = SliceSearcher<'p, u8>;
+    type Consumer = NaiveSearcher<'p, u8>;
+
+    fn into_searcher(self) -> Self::Searcher {
+        SliceSearcher::new(self.as_bytes())
+    }
+
+    fn into_consumer(self) -> Self::Consumer {
+        NaiveSearcher::new(self.as_bytes())
+    }
+}
+
+#[cfg(test)]
+mod needle_tests {
+    use super::*;
+
+    #[cfg(windows)]
+    use crate::os::windows::ffi::OsStringExt;
+    #[cfg(unix)]
+    use crate::os::unix::ffi::OsStrExt;
+
+    #[test]
+    #[cfg(any(unix, target_os = "redox", target_arch = "wasm32"))]
+    fn test_trim() {
+        assert_eq!(
+            OsStr::from_bytes(b"\xaa\xbb\xaa\xcc\xaa\xbb\xaa")
+                .trim_start_matches(OsStr::from_bytes(b"\xaa")),
+            OsStr::from_bytes(b"\xbb\xaa\xcc\xaa\xbb\xaa"),
+        );
+        assert_eq!(
+            OsStr::from_bytes(b"\xaa\xbb\xaa\xcc\xaa\xbb\xaa")
+                .trim_end_matches(OsStr::from_bytes(b"\xaa")),
+            OsStr::from_bytes(b"\xaa\xbb\xaa\xcc\xaa\xbb"),
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_trim_start_low_surrogate() {
+        let pat = OsString::from_wide(&[0xdc00]);
+        let a = &OsStr::new("\u{10000}aaa")[2..];
+        assert_eq!(a.trim_start_matches(&*pat), OsStr::new("aaa"));
+
+        let b = OsString::from_wide(&[0xd800, 0xdc00, 0xdc00, 0x62, 0x62, 0x62]);
+        assert_eq!(b[2..].trim_start_matches(&*pat), OsStr::new("bbb"));
+
+        let c = OsString::from_wide(&[0xdc00, 0xdc00, 0x63, 0x63, 0x63]);
+        assert_eq!(c.trim_start_matches(&*pat), OsStr::new("ccc"));
+
+        let d = &OsStr::new("\u{ffc00}ddd")[2..];
+        assert_eq!(d.trim_start_matches(&*pat), OsStr::new("ddd"));
+
+        let e = OsStr::new("㰀eee");
+        assert_eq!(e.trim_start_matches(&*pat), e);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_trim_start_high_surrogate() {
+        let pat = OsString::from_wide(&[0xd800]);
+        let a = OsStr::new("\u{10000}");
+        assert_eq!(a.trim_start_matches(&*pat), &*OsString::from_wide(&[0xdc00]));
+
+        let b = OsString::from_wide(&[0xd800, 0x62, 0x62, 0x62]);
+        assert_eq!(b.trim_start_matches(&*pat), OsStr::new("bbb"));
+
+        let c = OsString::from_wide(&[0xd800, 0xd800, 0xdc00, 0x63, 0x63, 0x63]);
+        assert_eq!(c.trim_start_matches(&*pat), &c[5..]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_trim_end_high_surrogate() {
+        let pat = OsString::from_wide(&[0xd800]);
+        let a = OsStr::new("aaa\u{10000}");
+        assert_eq!(a[..a.len()-2].trim_end_matches(&*pat), OsStr::new("aaa"));
+
+        let b = OsString::from_wide(&[0x62, 0x62, 0x62, 0xd800, 0xd800, 0xdc00]);
+        assert_eq!(b[..b.len()-2].trim_end_matches(&*pat), OsStr::new("bbb"));
+
+        let c = OsString::from_wide(&[0x63, 0x63, 0x63, 0xd800, 0xd800]);
+        assert_eq!(c.trim_end_matches(&*pat), OsStr::new("ccc"));
+
+        let d = OsStr::new("ddd\u{103ff}");
+        assert_eq!(d[..d.len()-2].trim_end_matches(&*pat), OsStr::new("ddd"));
+
+        let e = OsStr::new("eee\u{11000}");
+        let e = &e[..e.len()-2];
+        assert_eq!(e.trim_end_matches(&*pat), e);
+
+        let f = OsString::from_wide(&[0x66, 0x66, 0x66, 0xdc00]);
+        assert_eq!(f.trim_end_matches(&*pat), &*f);
+    }
+
+
+    #[test]
+    #[cfg(windows)]
+    fn test_trim_end_low_surrogate() {
+        let pat = OsString::from_wide(&[0xdc00]);
+        let a = OsStr::new("\u{10000}");
+        assert_eq!(a.trim_end_matches(&*pat), &*OsString::from_wide(&[0xd800]));
+
+        let b = OsString::from_wide(&[0x62, 0x62, 0x62, 0xdc00]);
+        assert_eq!(b.trim_end_matches(&*pat), OsStr::new("bbb"));
+
+        let c = OsString::from_wide(&[0x63, 0x63, 0x63, 0xdbff, 0xdc00, 0xdc00]);
+        assert_eq!(c.trim_end_matches(&*pat), &c[..c.len()-5]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_match_string_with_surrogates() {
+        let haystack = &OsStr::new("\u{10000}a\u{10000}a\u{10000}\u{10000}")[2..16];
+        // 0..3 = U+DC00
+        // 3..4 = 'a'
+        // 4..6 = U+D800
+        // 6..8 = U+DC00
+        // 8..9 = 'a'
+        // 9..11 = U+D800
+        // 11..13 = U+DC00
+        // 13..16 = U+D800
+
+        let pat = "a";
+        let matched_pat = OsStr::new(pat);
+        assert_eq!(haystack.match_ranges(pat).collect::<Vec<_>>(), vec![
+            (3..4, matched_pat),
+            (8..9, matched_pat),
+        ]);
+        assert_eq!(haystack.rmatch_ranges(pat).collect::<Vec<_>>(), vec![
+            (8..9, matched_pat),
+            (3..4, matched_pat),
+        ]);
+
+        let pat = OsString::from_wide(&[0xdc00, 0x61]);
+        assert_eq!(haystack.match_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (0..4, &*pat),
+            (6..9, &*pat),
+        ]);
+        assert_eq!(haystack.rmatch_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (6..9, &*pat),
+            (0..4, &*pat),
+        ]);
+
+        let pat = OsString::from_wide(&[0x61, 0xd800]);
+        assert_eq!(haystack.match_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (3..6, &*pat),
+            (8..11, &*pat),
+        ]);
+        assert_eq!(haystack.rmatch_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (8..11, &*pat),
+            (3..6, &*pat),
+        ]);
+
+        let pat = "\u{10000}";
+        let matched_pat = OsStr::new(pat);
+        assert_eq!(haystack.match_ranges(pat).collect::<Vec<_>>(), vec![
+            (4..8, matched_pat),
+            (9..13, matched_pat),
+        ]);
+        assert_eq!(haystack.rmatch_ranges(pat).collect::<Vec<_>>(), vec![
+            (9..13, matched_pat),
+            (4..8, matched_pat),
+        ]);
+
+        let pat = OsString::from_wide(&[0xd800]);
+        assert_eq!(haystack.match_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (4..6, &*pat),
+            (9..11, &*pat),
+            (13..16, &*pat),
+        ]);
+        assert_eq!(haystack.rmatch_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (13..16, &*pat),
+            (9..11, &*pat),
+            (4..6, &*pat),
+        ]);
+
+        let pat = OsString::from_wide(&[0xdc00]);
+        assert_eq!(haystack.match_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (0..3, &*pat),
+            (6..8, &*pat),
+            (11..13, &*pat),
+        ]);
+        assert_eq!(haystack.rmatch_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (11..13, &*pat),
+            (6..8, &*pat),
+            (0..3, &*pat),
+        ]);
+
+        let pat = OsString::from_wide(&[0xdc00, 0xd800]);
+        assert_eq!(haystack.match_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (11..16, &*pat),
+        ]);
+        assert_eq!(haystack.rmatch_ranges(&*pat).collect::<Vec<_>>(), vec![
+            (11..16, &*pat),
+        ]);
+    }
+}
+

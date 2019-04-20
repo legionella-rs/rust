@@ -3,11 +3,14 @@
 
 use crate::borrow::Cow;
 use crate::fmt;
-use crate::sys_common::wtf8::{Wtf8, Wtf8Buf};
+use crate::sys_common::wtf8::{self, Wtf8, Wtf8Buf};
 use crate::mem;
 use crate::rc::Rc;
 use crate::sync::Arc;
+use crate::ops::{Index, Range, RangeFrom, RangeTo};
 use crate::sys_common::{AsInner, IntoInner, FromInner};
+use core::slice::needles::{SliceSearcher, NaiveSearcher};
+use crate::needle::Hay;
 
 #[derive(Clone, Hash)]
 pub struct Buf {
@@ -44,6 +47,7 @@ impl fmt::Display for Buf {
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Slice {
     pub inner: Wtf8
 }
@@ -57,6 +61,30 @@ impl fmt::Debug for Slice {
 impl fmt::Display for Slice {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.inner, formatter)
+    }
+}
+
+impl Index<Range<usize>> for Slice {
+    type Output = Slice;
+
+    fn index(&self, range: Range<usize>) -> &Slice {
+        unsafe { mem::transmute(&self.inner[range]) }
+    }
+}
+
+impl Index<RangeFrom<usize>> for Slice {
+    type Output = Slice;
+
+    fn index(&self, range: RangeFrom<usize>) -> &Slice {
+        unsafe { mem::transmute(&self.inner[range]) }
+    }
+}
+
+impl Index<RangeTo<usize>> for Slice {
+    type Output = Slice;
+
+    fn index(&self, range: RangeTo<usize>) -> &Slice {
+        unsafe { mem::transmute(&self.inner[range]) }
     }
 }
 
@@ -169,4 +197,26 @@ impl Slice {
         let rc = self.inner.into_rc();
         unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Slice) }
     }
+
+    pub unsafe fn next_index(&self, index: usize) -> usize {
+        self.inner.next_index(index)
+    }
+
+    pub unsafe fn prev_index(&self, index: usize) -> usize {
+        self.inner.prev_index(index)
+    }
+
+    pub fn into_searcher(&self) -> InnerSearcher<SliceSearcher<'_, u8>> {
+        wtf8::new_wtf8_searcher(&self.inner)
+    }
+
+    pub fn into_consumer(&self) -> InnerSearcher<NaiveSearcher<'_, u8>> {
+        wtf8::new_wtf8_consumer(&self.inner)
+    }
+
+    pub fn as_bytes_for_searcher(&self) -> &[u8] {
+        self.inner.as_inner()
+    }
 }
+
+pub use crate::sys_common::wtf8::Wtf8Searcher as InnerSearcher;
