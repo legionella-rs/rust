@@ -95,6 +95,16 @@ pub fn check_intrinsic_type(tcx: TyCtxt<'_>, it: &hir::ForeignItem) {
         })
     };
 
+    if name.starts_with("atomic_scoped_fence_") {
+        // separate for auto merging.
+        // We don't check the scope as that's "OS" defined.
+        let (n_tps, inputs, output, unsafety) =
+            (0, Vec::new(), tcx.mk_unit(), hir::Unsafety::Unsafe);
+        equate_intrinsic_type(tcx, it, n_tps, Abi::RustIntrinsic,
+                              unsafety, inputs, output);
+        return;
+    }
+
     let (n_tps, inputs, output, unsafety) = if name.starts_with("atomic_") {
         let split : Vec<&str> = name.split('_').collect();
         assert!(split.len() >= 2, "Atomic intrinsic in an incorrect format");
