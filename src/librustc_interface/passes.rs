@@ -862,7 +862,8 @@ pub fn create_global_ctxt(
             hir_map,
             query_result_on_disk_cache,
             &crate_name,
-            &outputs
+            &outputs,
+            None,
         );
 
         global_ctxt = Some(gcx);
