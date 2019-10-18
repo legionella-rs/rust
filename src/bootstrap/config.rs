@@ -103,11 +103,13 @@ pub struct Config {
     pub rustc_parallel: bool,
     pub rustc_default_linker: Option<String>,
     pub rust_optimize_tests: bool,
+    pub rust_polly_tests: bool,
     pub rust_dist_src: bool,
     pub rust_codegen_backends: Vec<Interned<String>>,
     pub rust_codegen_backends_dir: String,
     pub rust_verify_llvm_ir: bool,
     pub rust_remap_debuginfo: bool,
+    pub rust_polly_self: bool,
 
     pub build: Interned<String>,
     pub hosts: Vec<Interned<String>>,
@@ -308,6 +310,7 @@ struct Rust {
     musl_root: Option<String>,
     rpath: Option<bool>,
     optimize_tests: Option<bool>,
+    polly_tests: Option<bool>,
     codegen_tests: Option<bool>,
     ignore_git: Option<bool>,
     debug: Option<bool>,
@@ -324,6 +327,7 @@ struct Rust {
     backtrace_on_ice: Option<bool>,
     verify_llvm_ir: Option<bool>,
     remap_debuginfo: Option<bool>,
+    polly_self: Option<bool>,
     jemalloc: Option<bool>,
     test_compare_mode: Option<bool>,
     llvm_libunwind: Option<bool>,
@@ -544,6 +548,10 @@ impl Config {
             optimize = rust.optimize;
             ignore_git = rust.ignore_git;
             set(&mut config.rust_optimize_tests, rust.optimize_tests);
+            set(&mut config.rust_polly_tests, rust.polly_tests);
+            if !config.rust_optimize_tests {
+                config.rust_polly_tests = false;
+            }
             set(&mut config.codegen_tests, rust.codegen_tests);
             set(&mut config.rust_rpath, rust.rpath);
             set(&mut config.jemalloc, rust.jemalloc);
@@ -579,6 +587,9 @@ impl Config {
 
             config.rust_codegen_units = rust.codegen_units.map(threads_from_config);
             config.rust_codegen_units_std = rust.codegen_units_std.map(threads_from_config);
+            config.rust_polly_self = rust
+              .polly_self
+              .unwrap_or(false);
         }
 
         if let Some(ref t) = toml.target {
@@ -640,6 +651,10 @@ impl Config {
         config.rust_debuginfo_level_std = with_defaults(debuginfo_level_std);
         config.rust_debuginfo_level_tools = with_defaults(debuginfo_level_tools);
         config.rust_debuginfo_level_tests = debuginfo_level_tests.unwrap_or(0);
+
+        if !config.rust_optimize {
+          config.rust_polly_self = false;
+        }
 
         let default = config.channel == "dev";
         config.ignore_git = ignore_git.unwrap_or(default);

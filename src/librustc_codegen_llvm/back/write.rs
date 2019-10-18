@@ -82,20 +82,28 @@ pub fn write_output_file(
 pub fn create_informational_target_machine(
     sess: &Session,
     find_features: bool,
-) -> &'static mut llvm::TargetMachine {
-    target_machine_factory(sess, config::OptLevel::No, find_features)().unwrap_or_else(|err| {
-        llvm_err(sess.diagnostic(), &err).raise()
-    })
+) -> Option<&'static mut llvm::TargetMachine> {
+    let tm = target_machine_factory(sess, config::OptLevel::No, find_features)();
+    if !sess.target.target.options.obj_is_bitcode {
+        Some(tm.unwrap_or_else(|err| {
+            llvm_err(sess.diagnostic(), &err).raise()
+        }))
+    } else {
+        tm.ok()
+    }
 }
 
 pub fn create_target_machine(
     tcx: TyCtxt<'_>,
     find_features: bool,
-) -> &'static mut llvm::TargetMachine {
-    target_machine_factory(&tcx.sess, tcx.backend_optimization_level(LOCAL_CRATE), find_features)()
-    .unwrap_or_else(|err| {
-        llvm_err(tcx.sess.diagnostic(), &err).raise()
-    })
+) -> Option<&'static mut llvm::TargetMachine> {
+    let tm = target_machine_factory(tcx.sess, tcx.backend_optimization_level(LOCAL_CRATE),
+                                    find_features)();
+    if !tcx.sess.target.target.options.obj_is_bitcode {
+        Some(tm.unwrap_or_else(|err| llvm_err(tcx.sess.diagnostic(), &err).raise() ))
+    } else {
+        tm.ok()
+    }
 }
 
 pub fn to_llvm_opt_settings(cfg: config::OptLevel) -> (llvm::CodeGenOptLevel, llvm::CodeGenOptSize)
@@ -310,7 +318,7 @@ pub(crate) unsafe fn optimize(cgcx: &CodegenContext<LlvmCodegenBackend>,
 
     let llmod = module.module_llvm.llmod();
     let llcx = &*module.module_llvm.llcx;
-    let tm = &*module.module_llvm.tm;
+    let tm = module.module_llvm.tm();
     let _handlers = DiagnosticHandlers::new(cgcx, diag_handler, llcx);
 
     let module_name = module.name.clone();
@@ -381,8 +389,10 @@ pub(crate) unsafe fn optimize(cgcx: &CodegenContext<LlvmCodegenBackend>,
             // we'll get errors in LLVM.
             let using_thin_buffers = config.bitcode_needed();
             if !config.no_prepopulate_passes {
-                llvm::LLVMRustAddAnalysisPasses(tm, fpm, llmod);
-                llvm::LLVMRustAddAnalysisPasses(tm, mpm, llmod);
+                if let Some(tm) = tm {
+                    llvm::LLVMRustAddAnalysisPasses(tm, fpm, llmod, config.polly);
+                    llvm::LLVMRustAddAnalysisPasses(tm, mpm, llmod, config.polly);
+                }
                 let opt_level = config.opt_level.map(|x| to_llvm_opt_settings(x).0)
                     .unwrap_or(llvm::CodeGenOptLevel::None);
                 let prepare_for_thin_lto = cgcx.lto == Lto::Thin || cgcx.lto == Lto::ThinLocal ||
@@ -458,7 +468,7 @@ pub(crate) unsafe fn codegen(cgcx: &CodegenContext<LlvmCodegenBackend>,
     {
         let llmod = module.module_llvm.llmod();
         let llcx = &*module.module_llvm.llcx;
-        let tm = &*module.module_llvm.tm;
+        let tm = module.module_llvm.tm();
         let module_name = module.name.clone();
         let module_name = Some(&module_name[..]);
         let handlers = DiagnosticHandlers::new(cgcx, diag_handler, llcx);
@@ -475,14 +485,17 @@ pub(crate) unsafe fn codegen(cgcx: &CodegenContext<LlvmCodegenBackend>,
         // pass manager passed to the closure should be ensured to not
         // escape the closure itself, and the manager should only be
         // used once.
-        unsafe fn with_codegen<'ll, F, R>(tm: &'ll llvm::TargetMachine,
+        unsafe fn with_codegen<'ll, F, R>(tm: Option<&'ll llvm::TargetMachine>,
                                           llmod: &'ll llvm::Module,
                                           no_builtins: bool,
+                                          polly: bool,
                                           f: F) -> R
             where F: FnOnce(&'ll mut PassManager<'ll>) -> R,
         {
             let cpm = llvm::LLVMCreatePassManager();
-            llvm::LLVMRustAddAnalysisPasses(tm, cpm, llmod);
+            if let Some(tm) = tm {
+                llvm::LLVMRustAddAnalysisPasses(tm, cpm, llmod, polly);
+            }
             llvm::LLVMRustAddLibraryInfo(cpm, llmod, no_builtins);
             f(cpm)
         }
@@ -574,7 +587,7 @@ pub(crate) unsafe fn codegen(cgcx: &CodegenContext<LlvmCodegenBackend>,
                     cursor.position() as size_t
                 }
 
-                with_codegen(tm, llmod, config.no_builtins, |cpm| {
+                with_codegen(tm, llmod, config.no_builtins, config.polly, |cpm| {
                     let result =
                         llvm::LLVMRustPrintModule(cpm, llmod, out_c.as_ptr(), demangle_callback);
                     llvm::LLVMDisposePassManager(cpm);
@@ -597,16 +610,16 @@ pub(crate) unsafe fn codegen(cgcx: &CodegenContext<LlvmCodegenBackend>,
                 } else {
                     llmod
                 };
-                with_codegen(tm, llmod, config.no_builtins, |cpm| {
-                    write_output_file(diag_handler, tm, cpm, llmod, &path,
+                with_codegen(tm, llmod, config.no_builtins, config.polly, |cpm| {
+                    write_output_file(diag_handler, tm.unwrap(), cpm, llmod, &path,
                                       llvm::FileType::AssemblyFile)
                 })?;
             }
 
             if write_obj {
                 let _timer = cgcx.prof.generic_activity("LLVM_module_codegen_emit_obj");
-                with_codegen(tm, llmod, config.no_builtins, |cpm| {
-                    write_output_file(diag_handler, tm, cpm, llmod, &obj_out,
+                with_codegen(tm, llmod, config.no_builtins, config.polly, |cpm| {
+                    write_output_file(diag_handler, tm.unwrap(), cpm, llmod, &obj_out,
                                       llvm::FileType::ObjectFile)
                 })?;
             } else if asm_to_obj {
@@ -753,7 +766,8 @@ pub unsafe fn with_llvm_pmb(llmod: &llvm::Module,
         llvm::LLVMPassManagerBuilderSetDisableUnrollLoops(builder, 1);
     }
 
-    llvm::LLVMRustAddBuilderLibraryInfo(builder, llmod, config.no_builtins);
+    llvm::LLVMRustAddBuilderLibraryInfo(builder, llmod, config.no_builtins,
+                                        config.polly);
 
     // Here we match what clang does (kinda). For O0 we only inline
     // always-inline functions (but don't add lifetime intrinsics), at O1 we

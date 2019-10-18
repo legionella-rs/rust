@@ -347,7 +347,7 @@ pub fn __rustc_codegen_backend() -> Box<dyn CodegenBackend> {
 pub struct ModuleLlvm {
     llcx: &'static mut llvm::Context,
     llmod_raw: *const llvm::Module,
-    tm: &'static mut llvm::TargetMachine,
+    tm: Option<&'static mut llvm::TargetMachine>,
 }
 
 unsafe impl Send for ModuleLlvm { }
@@ -398,7 +398,7 @@ impl ModuleLlvm {
             Ok(ModuleLlvm {
                 llmod_raw,
                 llcx,
-                tm,
+                tm: Some(tm),
             })
         }
     }
@@ -408,13 +408,18 @@ impl ModuleLlvm {
             &*self.llmod_raw
         }
     }
+    fn tm(&self) -> Option<&llvm::TargetMachine> {
+        self.tm.as_ref().map(|tm| &**tm )
+    }
 }
 
 impl Drop for ModuleLlvm {
     fn drop(&mut self) {
         unsafe {
             llvm::LLVMContextDispose(&mut *(self.llcx as *mut _));
-            llvm::LLVMRustDisposeTargetMachine(&mut *(self.tm as *mut _));
+            if let Some(ref mut tm) = self.tm {
+                llvm::LLVMRustDisposeTargetMachine(&mut *(*tm as *mut _));
+            }
         }
     }
 }

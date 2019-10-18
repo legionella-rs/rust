@@ -84,6 +84,7 @@ pub struct ModuleConfig {
     pub no_integrated_as: bool,
     pub embed_bitcode: bool,
     pub embed_bitcode_marker: bool,
+    pub polly: bool,
 }
 
 impl ModuleConfig {
@@ -116,7 +117,8 @@ impl ModuleConfig {
             vectorize_loop: false,
             vectorize_slp: false,
             merge_functions: false,
-            inline_threshold: None
+            inline_threshold: None,
+            polly: false,
         }
     }
 
@@ -149,6 +151,8 @@ impl ModuleConfig {
 
         self.vectorize_slp = !sess.opts.cg.no_vectorize_slp &&
                             sess.opts.optimize == config::OptLevel::Aggressive;
+
+        self.polly = sess.opts.debugging_opts.polly;
 
         // Some targets (namely, NVPTX) interact badly with the MergeFunctions
         // pass. This is because MergeFunctions can generate new function calls
@@ -204,6 +208,7 @@ pub struct CodegenContext<B: WriteBackendMethods> {
     pub no_landing_pads: bool,
     pub save_temps: bool,
     pub fewer_names: bool,
+    pub require_tm: bool,
     pub exported_symbols: Option<Arc<ExportedSymbols>>,
     pub opts: Arc<config::Options>,
     pub crate_types: Vec<config::CrateType>,
@@ -1027,6 +1032,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
         lto: sess.lto(),
         no_landing_pads: sess.no_landing_pads(),
         fewer_names: sess.fewer_names(),
+        require_tm: !sess.target.target.options.obj_is_bitcode,
         save_temps: sess.opts.cg.save_temps,
         opts: Arc::new(sess.opts.clone()),
         time_passes: sess.time_extended(),
