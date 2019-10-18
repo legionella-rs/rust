@@ -21,13 +21,13 @@ pub use crate::cstore_impl::{provide, provide_extern};
 // local crate numbers (as generated during this session). Each external
 // crate may refer to types in other external crates, and each has their
 // own crate numbers.
-crate type CrateNumMap = IndexVec<CrateNum, CrateNum>;
+pub type CrateNumMap = IndexVec<CrateNum, CrateNum>;
 
-crate struct MetadataBlob(pub MetadataRef);
+pub struct MetadataBlob(pub MetadataRef);
 
 /// Holds information about a syntax_pos::SourceFile imported from another crate.
 /// See `imported_source_files()` for more information.
-crate struct ImportedSourceFile {
+pub struct ImportedSourceFile {
     /// This SourceFile's byte-offset within the source_map of its original crate
     pub original_start_pos: syntax_pos::BytePos,
     /// The end of this SourceFile within the source_map of its original crate
@@ -38,7 +38,7 @@ crate struct ImportedSourceFile {
 
 pub struct CrateMetadata {
     /// The primary crate data - binary metadata blob.
-    crate blob: MetadataBlob,
+    pub blob: MetadataBlob,
 
     // --- Some data pre-decoded from the metadata blob, usually for performance ---
 
@@ -47,51 +47,51 @@ pub struct CrateMetadata {
     /// lifetime is only used behind `Lazy`, and therefore acts like an
     /// universal (`for<'tcx>`), that is paired up with whichever `TyCtxt`
     /// is being used to decode those values.
-    crate root: schema::CrateRoot<'static>,
+    pub root: schema::CrateRoot<'static>,
     /// For each definition in this crate, we encode a key. When the
     /// crate is loaded, we read all the keys and put them in this
     /// hashmap, which gives the reverse mapping. This allows us to
     /// quickly retrace a `DefPath`, which is needed for incremental
     /// compilation support.
-    crate def_path_table: Lrc<DefPathTable>,
+    pub def_path_table: Lrc<DefPathTable>,
     /// Trait impl data.
     /// FIXME: Used only from queries and can use query cache,
     /// so pre-decoding can probably be avoided.
-    crate trait_impls: FxHashMap<(u32, DefIndex), schema::Lazy<[DefIndex]>>,
+    pub trait_impls: FxHashMap<(u32, DefIndex), schema::Lazy<[DefIndex]>>,
     /// Proc macro descriptions for this crate, if it's a proc macro crate.
-    crate raw_proc_macros: Option<&'static [ProcMacro]>,
+    pub raw_proc_macros: Option<&'static [ProcMacro]>,
     /// Source maps for code from the crate.
-    crate source_map_import_info: RwLock<Vec<ImportedSourceFile>>,
+    pub source_map_import_info: RwLock<Vec<ImportedSourceFile>>,
     /// Used for decoding interpret::AllocIds in a cached & thread-safe manner.
-    crate alloc_decoding_state: AllocDecodingState,
+    pub alloc_decoding_state: AllocDecodingState,
     /// The `DepNodeIndex` of the `DepNode` representing this upstream crate.
     /// It is initialized on the first access in `get_crate_dep_node_index()`.
     /// Do not access the value directly, as it might not have been initialized yet.
     /// The field must always be initialized to `DepNodeIndex::INVALID`.
-    crate dep_node_index: AtomicCell<DepNodeIndex>,
+    pub dep_node_index: AtomicCell<DepNodeIndex>,
 
     // --- Other significant crate properties ---
 
     /// ID of this crate, from the current compilation session's point of view.
-    crate cnum: CrateNum,
+    pub cnum: CrateNum,
     /// Maps crate IDs as they are were seen from this crate's compilation sessions into
     /// IDs as they are seen from the current compilation session.
-    crate cnum_map: CrateNumMap,
+    pub cnum_map: CrateNumMap,
     /// Same ID set as `cnum_map` plus maybe some injected crates like panic runtime.
-    crate dependencies: Lock<Vec<CrateNum>>,
+    pub dependencies: Lock<Vec<CrateNum>>,
     /// How to link (or not link) this crate to the currently compiled crate.
-    crate dep_kind: Lock<DepKind>,
+    pub dep_kind: Lock<DepKind>,
     /// Filesystem location of this crate.
-    crate source: CrateSource,
+    pub source: CrateSource,
     /// Whether or not this crate should be consider a private dependency
     /// for purposes of the 'exported_private_dependencies' lint
-    crate private_dep: bool,
+    pub private_dep: bool,
 
     // --- Data used only for improving diagnostics ---
 
     /// Information about the `extern crate` item or path that caused this crate to be loaded.
     /// If this is `None`, then the crate was injected (e.g., by the allocator).
-    crate extern_crate: Lock<Option<ExternCrate>>,
+    pub extern_crate: Lock<Option<ExternCrate>>,
 }
 
 pub struct CStore {
@@ -116,25 +116,25 @@ impl CStore {
         }
     }
 
-    crate fn alloc_new_crate_num(&self) -> CrateNum {
+    pub fn alloc_new_crate_num(&self) -> CrateNum {
         let mut metas = self.metas.borrow_mut();
         let cnum = CrateNum::new(metas.len());
         metas.push(None);
         cnum
     }
 
-    crate fn get_crate_data(&self, cnum: CrateNum) -> Lrc<CrateMetadata> {
+    pub fn get_crate_data(&self, cnum: CrateNum) -> Lrc<CrateMetadata> {
         self.metas.borrow()[cnum].clone()
             .unwrap_or_else(|| panic!("Failed to get crate data for {:?}", cnum))
     }
 
-    crate fn set_crate_data(&self, cnum: CrateNum, data: Lrc<CrateMetadata>) {
+    pub fn set_crate_data(&self, cnum: CrateNum, data: Lrc<CrateMetadata>) {
         let mut metas = self.metas.borrow_mut();
         assert!(metas[cnum].is_none(), "Overwriting crate metadata entry");
         metas[cnum] = Some(data);
     }
 
-    crate fn iter_crate_data<I>(&self, mut i: I)
+    pub fn iter_crate_data<I>(&self, mut i: I)
         where I: FnMut(CrateNum, &Lrc<CrateMetadata>)
     {
         for (k, v) in self.metas.borrow().iter_enumerated() {
