@@ -47,6 +47,7 @@ pub enum CallConv {
     X86_VectorCall = 80,
     X86_Intr = 83,
     AmdGpuKernel = 91,
+    SpirKernel = 76,
 }
 
 /// LLVMRustLinkage

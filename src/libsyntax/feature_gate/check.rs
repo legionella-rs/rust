@@ -234,6 +234,10 @@ impl<'a> PostExpansionVisitor<'a> {
                 gate_feature_post!(&self, abi_amdgpu_kernel, span,
                                    "amdgpu-kernel ABI is experimental and subject to change");
             },
+            Abi::SpirKernel => {
+                gate_feature_post!(&self, abi_spir_kernel, span,
+                                   "spir-kernel ABI is experimental and subject to change");
+            },
             // Stable
             Abi::Cdecl |
             Abi::Stdcall |

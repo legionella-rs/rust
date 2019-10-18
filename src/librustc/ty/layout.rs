@@ -2610,6 +2610,7 @@ where
             Msp430Interrupt => Conv::Msp430Intr,
             X86Interrupt => Conv::X86Intr,
             AmdGpuKernel => Conv::AmdGpuKernel,
+            SpirKernel => Conv::SpirKernel,
 
             // These API constants ought to be more specific...
             Cdecl => Conv::C,
