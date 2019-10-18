@@ -302,6 +302,23 @@ fn link_rlib<'a, B: ArchiveBuilder<'a>>(sess: &'a Session,
         ab.add_file(obj);
     }
 
+    if sess.opts.debugging_opts.always_emit_metadata {
+        // Include the compiled metadata object for runtime use:
+        if let Some(md) = codegen_results.metadata_module.as_ref() {
+            if let Some(path) = md.object.as_ref() {
+                ab.add_file(&*path);
+            } else {
+                let msg = format!("crate {} has no metadata object path",
+                                  codegen_results.crate_name);
+                sess.warn(&msg);
+            }
+        } else {
+            let msg = format!("crate {} has no metadata",
+                              codegen_results.crate_name);
+            sess.warn(&msg);
+        }
+    }
+
     // Note that in this loop we are ignoring the value of `lib.cfg`. That is,
     // we may not be configured to actually include a static library if we're
     // adding it here. That's because later when we consume this rlib we'll
@@ -1095,7 +1112,8 @@ fn link_args<'a, B: ArchiveBuilder<'a>>(cmd: &mut dyn Linker,
     // executable. This metadata is in a separate object file from the main
     // object file, so we link that in here.
     if crate_type == config::CrateType::Dylib ||
-       crate_type == config::CrateType::ProcMacro {
+       crate_type == config::CrateType::ProcMacro ||
+       sess.opts.debugging_opts.always_emit_metadata {
         let obj = codegen_results.metadata_module
             .as_ref()
             .and_then(|m| m.object.as_ref());
@@ -1114,7 +1132,8 @@ fn link_args<'a, B: ArchiveBuilder<'a>>(cmd: &mut dyn Linker,
     // Try to strip as much out of the generated object by removing unused
     // sections if possible. See more comments in linker.rs
     if !sess.opts.cg.link_dead_code {
-        let keep_metadata = crate_type == config::CrateType::Dylib;
+        let keep_metadata = crate_type == config::CrateType::Dylib ||
+          sess.opts.debugging_opts.always_emit_metadata;
         cmd.gc_sections(keep_metadata);
     }
 
@@ -1523,9 +1542,15 @@ fn add_upstream_rust_crates<'a, B: ArchiveBuilder<'a>>(
             lib.kind == NativeLibraryKind::NativeStatic && !relevant_lib(sess, lib)
         });
 
+        let skip_exe = sess.opts.debugging_opts.always_emit_metadata &&
+            crate_type != config::CrateType::Executable;
+        let whole_exe = sess.opts.debugging_opts.always_emit_metadata ||
+            crate_type == config::CrateType::Executable;
+
         if (!are_upstream_rust_objects_already_included(sess) ||
             ignored_for_lto(sess, &codegen_results.crate_info, cnum)) &&
            crate_type != config::CrateType::Dylib &&
+           skip_exe &&
            !skip_native {
             cmd.link_rlib(&fix_windows_verbatim_for_gcc(cratepath));
             return
@@ -1538,6 +1563,69 @@ fn add_upstream_rust_crates<'a, B: ArchiveBuilder<'a>>(
         time_ext(sess.time_extended(), &format!("altering {}.rlib", name), || {
             let mut archive = <B as ArchiveBuilder>::new(sess, &dst, Some(cratepath));
             archive.update_symbols();
+
+            // If we're asked to always emit metadata and this is the compiler builtins
+            // crate, we need to do something special. To avoid multiple defs, we can't
+            // link the whole archive, but we still need to ensure the crate our metadata
+            // is present. So what we do is pass compiler builtins to the linker as normal
+            // (ie as if we're not always emitting metadata) and then add the metadata object
+            // file to the link directly.
+            // Note some stuff is duplicated with the surrounding code so this will
+            // be merge conflict free as often as possible.
+            if (crate_type == config::CrateType::Dylib || whole_exe) &&
+                (codegen_results.crate_info.compiler_builtins == Some(cnum) &&
+                    sess.opts.debugging_opts.always_emit_metadata) {
+
+                let canonical_name = name.replace("-", "_");
+
+                archive.iter(|f, data| {
+                    use std::fs::File;
+                    use std::io::Write;
+
+                    if f.ends_with(RLIB_BYTECODE_EXTENSION) || f == METADATA_FILENAME {
+                        return Ok(());
+                    }
+
+                    let canonical = f.replace("-", "_");
+
+                    // Look for `.rcgu.o` at the end of the filename to conclude
+                    // that this is a Rust-related object file.
+                    fn looks_like_rust(s: &str) -> bool {
+                        let path = Path::new(s);
+                        let ext = path.extension().and_then(|s| s.to_str());
+                        if ext != Some(OutputType::Object.extension()) {
+                            return false;
+                        }
+                        let ext2 = path.file_stem()
+                            .and_then(|s| Path::new(s).extension())
+                            .and_then(|s| s.to_str());
+                        ext2 == Some(RUST_CGU_EXT)
+                    }
+
+                    let is_rust_object =
+                        canonical.starts_with(&canonical_name) &&
+                            looks_like_rust(&f);
+                    if !is_rust_object {
+                        return Ok(());
+                    }
+
+                    // the metadata object file name will have only one copy
+                    // of the canonical name in it.
+                    // ie compiler_builtins-b63db6b6496c40e8.3g6rz5o3xoq9u9v6.rcgu.o
+                    // vs compiler_builtins-b63db6b6496c40e8.compiler_builtins ...
+                    if canonical.rfind(canonical_name.as_str()) == Some(0) {
+                        let metadata_dst = tmpdir.join(f);
+                        {
+                            // Should IO errors be handled? Would cause merging issues.
+                            let mut f = File::create(&metadata_dst).unwrap();
+                            f.write_all(data).unwrap();
+                        }
+                        cmd.add_object(&metadata_dst);
+                    }
+                    Ok(())
+                })
+                    .unwrap();
+            }
 
             let mut any_objects = false;
             for f in archive.src_files() {
@@ -1600,7 +1688,7 @@ fn add_upstream_rust_crates<'a, B: ArchiveBuilder<'a>>(
             // Note, though, that we don't want to include the whole of a
             // compiler-builtins crate (e.g., compiler-rt) because it'll get
             // repeatedly linked anyway.
-            if crate_type == config::CrateType::Dylib &&
+            if (crate_type == config::CrateType::Dylib || whole_exe) &&
                 codegen_results.crate_info.compiler_builtins != Some(cnum) {
                 cmd.link_whole_rlib(&fix_windows_verbatim_for_gcc(&dst));
             } else {
