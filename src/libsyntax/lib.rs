@@ -89,7 +89,7 @@ pub struct Globals {
 }
 
 impl Globals {
-    fn new(edition: Edition) -> Globals {
+    pub fn new(edition: Edition) -> Globals {
         Globals {
             // We have no idea how many attributes their will be, so just
             // initiate the vectors with 0 bits. We'll grow them as necessary.
@@ -97,6 +97,13 @@ impl Globals {
             known_attrs: Lock::new(GrowableBitSet::new_empty()),
             syntax_pos_globals: syntax_pos::Globals::new(edition),
         }
+    }
+    pub fn with<F, R>(&self, f: F) -> R
+        where F: FnOnce() -> R
+    {
+        GLOBALS.set(self, || {
+            syntax_pos::GLOBALS.set(&self.syntax_pos_globals, f)
+        })
     }
 }
 
