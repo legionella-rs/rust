@@ -343,6 +343,8 @@ pub fn from_fn_attrs(
             }
         }
     }
+
+    cx.add_spirv_metadata(llfn, &codegen_fn_attrs);
 }
 
 pub fn provide(providers: &mut Providers<'_>) {

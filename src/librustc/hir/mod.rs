@@ -2688,6 +2688,8 @@ pub struct CodegenFnAttrs {
     /// The `#[export_name = "..."]` attribute, indicating a custom symbol a
     /// function should be exported under
     pub export_name: Option<Symbol>,
+    /// Attributes related to SPIRV
+    pub spirv: Option<SpirVAttrs>,
     /// The `#[link_name = "..."]` attribute, indicating a custom symbol an
     /// imported function should be imported as. Note that `export_name`
     /// probably isn't set when this is set, this is for foreign items while
@@ -2761,6 +2763,7 @@ impl CodegenFnAttrs {
             inline: InlineAttr::None,
             optimize: OptimizeAttr::None,
             export_name: None,
+            spirv: None,
             link_name: None,
             link_ordinal: None,
             target_features: vec![],
@@ -2800,6 +2803,39 @@ impl Default for CodegenFnAttrs {
     fn default() -> Self {
         CodegenFnAttrs::new()
     }
+}
+
+#[derive(Clone, RustcEncodable, RustcDecodable, Debug, HashStable)]
+pub struct SpirVImageTypeSpec {
+    pub dim: String,
+    pub depth: u32,
+    pub arrayed: bool,
+    pub multisampled: bool,
+    pub sampled: u32,
+    pub format: String,
+}
+
+#[derive(Clone, RustcEncodable, RustcDecodable, Debug, HashStable)]
+pub enum SpirVTypeSpec {
+    Image(SpirVImageTypeSpec),
+    SampledImage(SpirVImageTypeSpec),
+    Struct(Vec<SpirVAttrNode>),
+    Array(Box<SpirVAttrNode>),
+}
+
+#[derive(Clone, RustcEncodable, RustcDecodable, Debug, HashStable)]
+pub struct SpirVAttrNode {
+    pub type_spec: SpirVTypeSpec,
+    pub builtin: Option<String>,
+    pub decorations: Vec<(String, Vec<u32>)>,
+}
+
+#[derive(Clone, RustcEncodable, RustcDecodable, Debug, HashStable)]
+pub struct SpirVAttrs {
+    pub storage_class: Option<String>,
+    pub metadata: Option<SpirVAttrNode>,
+    pub exe_model: Option<String>,
+    pub exe_mode: Option<Vec<(String, Vec<u64>)>>,
 }
 
 #[derive(Copy, Clone, Debug)]
