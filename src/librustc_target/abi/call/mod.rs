@@ -17,6 +17,7 @@ mod riscv;
 mod s390x;
 mod sparc;
 mod sparc64;
+mod spirv;
 mod x86;
 mod x86_64;
 mod x86_win64;
@@ -567,6 +568,7 @@ impl<'a, Ty> FnType<'a, Ty> {
             "hexagon" => hexagon::compute_abi_info(self),
             "riscv32" => riscv::compute_abi_info(self, 32),
             "riscv64" => riscv::compute_abi_info(self, 64),
+            "spir" | "spir64" => spirv::compute_abi_info(cx, self),
             "wasm32" if cx.target_spec().target_os != "emscripten"
                 => wasm32_bindgen_compat::compute_abi_info(self),
             "wasm32" | "asmjs" => wasm32::compute_abi_info(cx, self),
