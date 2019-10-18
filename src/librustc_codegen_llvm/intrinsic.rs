@@ -693,6 +693,22 @@ impl IntrinsicCallMethods<'tcx> for Builder<'a, 'll, 'tcx> {
                 args[1].val.nontemporal_store(self, dst);
                 return;
             }
+            "amdgcn_dispatch_ptr" => {
+                // This intrinsic returns a pointer in the const addr space
+                // which can't be encoded in source level Rust.
+
+                let f = self.cx().get_intrinsic("llvm.amdgcn.dispatch.ptr");
+                let val = self.call(f, &[], None);
+                self.flat_addr_cast(val)
+            },
+            "amdgcn_queue_ptr" => {
+                // This intrinsic returns a pointer in the const addr space
+                // which can't be encoded in source level Rust.
+
+                let f = self.cx().get_intrinsic("llvm.amdgcn.queue.ptr");
+                let val = self.call(f, &[], None);
+                self.flat_addr_cast(val)
+            },
 
             _ => bug!("unknown intrinsic '{}'", name),
         };
