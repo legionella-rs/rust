@@ -1385,4 +1385,16 @@ impl Builder<'a, 'll, 'tcx> {
             llvm::LLVMAddIncoming(phi, &val, &bb, 1 as c_uint);
         }
     }
+
+    pub fn scoped_atomic_fence(&mut self, order: rustc_codegen_ssa::common::AtomicOrdering,
+                        scope: &str) {
+        unsafe {
+            llvm::LLVMRustBuildScopedAtomicFence(
+                self.llbuilder,
+                AtomicOrdering::from_generic(order),
+                scope.as_ptr(),
+                scope.len() as _,
+            );
+        }
+    }
 }
