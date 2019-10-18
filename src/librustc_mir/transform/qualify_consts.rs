@@ -1411,6 +1411,7 @@ impl<'a, 'tcx> Visitor<'tcx> for Checker<'a, 'tcx> {
                         Abi::RustIntrinsic |
                         Abi::PlatformIntrinsic => {
                             assert!(!self.tcx.is_const_fn(def_id));
+
                             match &self.tcx.item_name(def_id).as_str()[..] {
                                 // special intrinsic that can be called diretly without an intrinsic
                                 // feature gate needs a language feature gate

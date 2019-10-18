@@ -609,16 +609,22 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         let arg_count = fn_ty.args.len() + fn_ty.ret.is_indirect() as usize;
         let mut llargs = Vec::with_capacity(arg_count);
 
+        // Custom intrinsics are treated as-if they were normal functions here.
+        let is_custom_intrinsic = intrinsic.and_then(|_| instance )
+            .map(|instance| bx.tcx().custom_intrinsic_mir(instance).is_some() )
+            .unwrap_or_default();
+
         // Prepare the return value destination
         let ret_dest = if let Some((ref dest, _)) = *destination {
-            let is_intrinsic = intrinsic.is_some();
+            let is_intrinsic = intrinsic.is_some() && !is_custom_intrinsic;
             self.make_return_dest(&mut bx, dest, &fn_ty.ret, &mut llargs,
                                   is_intrinsic)
         } else {
             ReturnDest::Nothing
         };
 
-        if intrinsic.is_some() && intrinsic != Some("drop_in_place") {
+        if intrinsic.is_some() && intrinsic != Some("drop_in_place") &&
+            !is_custom_intrinsic {
             let dest = match ret_dest {
                 _ if fn_ty.ret.is_indirect() => llargs[0],
                 ReturnDest::Nothing =>

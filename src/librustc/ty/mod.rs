@@ -3028,20 +3028,26 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     /// Returns the possibly-auto-generated MIR of a `(DefId, Subst)` pair.
-    pub fn instance_mir(self, instance: ty::InstanceDef<'tcx>) -> &'tcx Body<'tcx> {
-        match instance {
+    pub fn instance_mir(self, instance: ty::Instance<'tcx>) -> &'tcx Body<'tcx> {
+        match instance.def {
             ty::InstanceDef::Item(did) => {
                 self.optimized_mir(did)
             }
+            ty::InstanceDef::Intrinsic(..) => {
+                if let Some(mir) = self.custom_intrinsic_mir(instance) {
+                    mir
+                } else {
+                    self.mir_shims(instance.def)
+                }
+            },
             ty::InstanceDef::VtableShim(..) |
             ty::InstanceDef::ReifyShim(..) |
-            ty::InstanceDef::Intrinsic(..) |
             ty::InstanceDef::FnPtrShim(..) |
             ty::InstanceDef::Virtual(..) |
             ty::InstanceDef::ClosureOnceShim { .. } |
             ty::InstanceDef::DropGlue(..) |
             ty::InstanceDef::CloneShim(..) => {
-                self.mir_shims(instance)
+                self.mir_shims(instance.def)
             }
         }
     }
@@ -3324,7 +3330,12 @@ fn instance_def_size_estimate<'tcx>(tcx: TyCtxt<'tcx>, instance_def: InstanceDef
     match instance_def {
         InstanceDef::Item(..) |
         InstanceDef::DropGlue(..) => {
-            let mir = tcx.instance_mir(instance_def);
+            let instance = Instance {
+                def: instance_def,
+                // this field can be whatever because it won't be used in this case.
+                substs: tcx.intern_substs(&[]),
+            };
+            let mir = tcx.instance_mir(instance);
             mir.basic_blocks().iter().map(|bb| bb.statements.len()).sum()
         },
         // Estimate the size of other compiler-generated shims to be 1.
