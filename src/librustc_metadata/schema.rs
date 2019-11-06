@@ -31,7 +31,7 @@ crate fn rustc_version() -> String {
 /// Metadata encoding version.
 /// N.B., increment this if you change the format of metadata such that
 /// the rustc version can't be found to compare with `rustc_version()`.
-const METADATA_VERSION: u8 = 4;
+pub const METADATA_VERSION: u8 = 4;
 
 /// Metadata header which includes `METADATA_VERSION`.
 /// To get older versions of rustc to ignore this metadata,
@@ -41,12 +41,12 @@ const METADATA_VERSION: u8 = 4;
 /// This header is followed by the position of the `CrateRoot`,
 /// which is encoded as a 32-bit big-endian unsigned integer,
 /// and further followed by the rustc version string.
-crate const METADATA_HEADER: &[u8; 12] =
+pub const METADATA_HEADER: &[u8; 12] =
     &[0, 0, 0, 0, b'r', b'u', b's', b't', 0, 0, 0, METADATA_VERSION];
 
 /// Additional metadata for a `Lazy<T>` where `T` may not be `Sized`,
 /// e.g. for `Lazy<[T]>`, this is the length (count of `T` values).
-crate trait LazyMeta {
+pub trait LazyMeta {
     type Meta: Copy + 'static;
 
     /// Returns the minimum encoded size.
@@ -100,7 +100,7 @@ impl<T: Encodable> LazyMeta for [T] {
 #[must_use]
 // FIXME(#59875) the `Meta` parameter only exists to dodge
 // invariance wrt `T` (coming from the `meta: T::Meta` field).
-crate struct Lazy<T, Meta = <T as LazyMeta>::Meta>
+pub struct Lazy<T, Meta = <T as LazyMeta>::Meta>
     where T: ?Sized + LazyMeta<Meta = Meta>,
           Meta: 'static + Copy,
 {
@@ -168,7 +168,7 @@ macro_rules! Lazy {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct CrateRoot<'tcx> {
+pub struct CrateRoot<'tcx> {
     pub name: Symbol,
     pub triple: TargetTriple,
     pub extra_filename: String,
@@ -214,7 +214,7 @@ crate struct CrateRoot<'tcx> {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct CrateDep {
+pub struct CrateDep {
     pub name: ast::Name,
     pub hash: Svh,
     pub host_hash: Option<Svh>,
@@ -223,13 +223,13 @@ crate struct CrateDep {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct TraitImpls {
+pub struct TraitImpls {
     pub trait_id: (u32, DefIndex),
     pub impls: Lazy<[DefIndex]>,
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct LazyPerDefTables<'tcx> {
+pub struct LazyPerDefTables<'tcx> {
     pub kind: Lazy!(PerDefTable<Lazy!(EntryKind<'tcx>)>),
     pub visibility: Lazy!(PerDefTable<Lazy<ty::Visibility>>),
     pub span: Lazy!(PerDefTable<Lazy<Span>>),
@@ -253,7 +253,7 @@ crate struct LazyPerDefTables<'tcx> {
 }
 
 #[derive(Copy, Clone, RustcEncodable, RustcDecodable)]
-crate enum EntryKind<'tcx> {
+pub enum EntryKind<'tcx> {
     Const(ConstQualif, Lazy<RenderedConst>),
     ImmStatic,
     MutStatic,
@@ -288,35 +288,35 @@ crate enum EntryKind<'tcx> {
 
 /// Additional data for EntryKind::Const and EntryKind::AssocConst
 #[derive(Clone, Copy, RustcEncodable, RustcDecodable)]
-crate struct ConstQualif {
+pub struct ConstQualif {
     pub mir: u8,
 }
 
 /// Contains a constant which has been rendered to a String.
 /// Used by rustdoc.
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct RenderedConst(pub String);
+pub struct RenderedConst(pub String);
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct ModData {
+pub struct ModData {
     pub reexports: Lazy<[def::Export<hir::HirId>]>,
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct MacroDef {
+pub struct MacroDef {
     pub body: String,
     pub legacy: bool,
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct FnData {
+pub struct FnData {
     pub asyncness: hir::IsAsync,
     pub constness: hir::Constness,
     pub param_names: Lazy<[ast::Name]>,
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct VariantData {
+pub struct VariantData {
     pub ctor_kind: CtorKind,
     pub discr: ty::VariantDiscr,
     /// If this is unit or tuple-variant/struct, then this is the index of the ctor id.
@@ -324,7 +324,7 @@ crate struct VariantData {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct TraitData {
+pub struct TraitData {
     pub unsafety: hir::Unsafety,
     pub paren_sugar: bool,
     pub has_auto_impl: bool,
@@ -332,7 +332,7 @@ crate struct TraitData {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct ImplData {
+pub struct ImplData {
     pub polarity: ty::ImplPolarity,
     pub defaultness: hir::Defaultness,
     pub parent_impl: Option<DefId>,
@@ -347,7 +347,7 @@ crate struct ImplData {
 /// is a trait or an impl and whether, in a trait, it has
 /// a default, or an in impl, whether it's marked "default".
 #[derive(Copy, Clone, RustcEncodable, RustcDecodable)]
-crate enum AssocContainer {
+pub enum AssocContainer {
     TraitRequired,
     TraitWithDefault,
     ImplDefault,
@@ -382,14 +382,14 @@ impl AssocContainer {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct MethodData {
+pub struct MethodData {
     pub fn_data: FnData,
     pub container: AssocContainer,
     pub has_self: bool,
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-crate struct GeneratorData<'tcx> {
+pub struct GeneratorData<'tcx> {
     pub layout: mir::GeneratorLayout<'tcx>,
 }
 
