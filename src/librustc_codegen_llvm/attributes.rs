@@ -224,7 +224,7 @@ pub fn from_fn_attrs(
         }
     }
 
-    inline(cx, llfn, codegen_fn_attrs.inline);
+    inline(cx, llfn, codegen_fn_attrs.inline.clone());
 
     // The `uwtable` attribute according to LLVM is:
     //
@@ -343,6 +343,8 @@ pub fn from_fn_attrs(
             }
         }
     }
+
+    cx.add_spirv_metadata(llfn, &codegen_fn_attrs);
 }
 
 pub fn provide(providers: &mut Providers<'_>) {
