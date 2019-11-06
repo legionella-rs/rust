@@ -6,6 +6,8 @@
 
 #![doc(html_root_url = "https://doc.rust-lang.org/nightly/")]
 
+#![recursion_limit="128"]
+
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(const_cstr_unchecked)]
