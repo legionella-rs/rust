@@ -247,8 +247,10 @@ impl<'mir, 'tcx, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
         };
 
+        let custom = self.tcx.custom_intrinsic_mir(instance);
+
         match instance.def {
-            ty::InstanceDef::Intrinsic(..) => {
+            ty::InstanceDef::Intrinsic(..) if custom.is_none() => {
                 // The intrinsic itself cannot diverge, so if we got here without a return
                 // place... (can happen e.g., for transmute returning `!`)
                 let dest = match dest {
@@ -262,6 +264,7 @@ impl<'mir, 'tcx, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 self.dump_place(*dest);
                 Ok(())
             }
+            ty::InstanceDef::Intrinsic(..) |
             ty::InstanceDef::VtableShim(..) |
             ty::InstanceDef::ReifyShim(..) |
             ty::InstanceDef::ClosureOnceShim { .. } |
@@ -332,6 +335,7 @@ impl<'mir, 'tcx, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                     // The Rust ABI is special: ZST get skipped.
                     let rust_abi = match caller_abi {
                         Abi::Rust | Abi::RustCall => true,
+                        Abi::RustIntrinsic if custom.is_some() => true,
                         _ => false
                     };
                     // We have two iterators: Where the arguments come from,
