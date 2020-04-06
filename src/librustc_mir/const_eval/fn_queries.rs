@@ -125,6 +125,9 @@ fn is_const_intrinsic(tcx: TyCtxt<'_>, def_id: DefId) -> Option<bool> {
 
     match tcx.fn_sig(def_id).abi() {
         Abi::RustIntrinsic | Abi::PlatformIntrinsic => {
+            if tcx.custom_intrinsic_mirgen(def_id).is_some() {
+                return Some(true);
+            }
             Some(tcx.lookup_const_stability(def_id).is_some())
         }
         _ => None,
