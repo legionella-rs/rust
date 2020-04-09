@@ -250,6 +250,8 @@ symbols! {
         allow_internal_unstable_backcompat_hack,
         allowed,
         always,
+        amdgcn_dispatch_ptr,
+        amdgcn_queue_ptr,
         and,
         and_then,
         any,
