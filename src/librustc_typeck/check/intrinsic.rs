@@ -338,6 +338,12 @@ pub fn check_intrinsic_type(tcx: TyCtxt<'_>, it: &hir::ForeignItem<'_>) {
                 // so it's not trivial to check this
                 return;
             }
+            "amdgcn_dispatch_ptr" => {
+                (0, vec![], tcx.mk_imm_ptr(tcx.types.u8))
+            }
+            "amdgcn_queue_ptr" => {
+                (0, vec![], tcx.mk_imm_ptr(tcx.types.u8))
+            }
 
             ref other => {
                 struct_span_err!(
