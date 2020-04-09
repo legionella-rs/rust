@@ -321,6 +321,13 @@ rustc_queries! {
             desc { |tcx| "asking for the custom MIR of `{}`", tcx.def_path_str(inst.def_id()) }
         }
 
+        query specialization_data(inst: ty::Instance<'tcx>) -> Option<&'tcx [u8]> {
+            desc { |tcx| "asking for the specialization data of `{}`", tcx.def_path_str(inst.def_id()) }
+        }
+        query stubbed_instance(inst: ty::Instance<'tcx>) -> ty::Instance<'tcx> {
+            desc { |tcx| "asking for the stub of `{}`", tcx.def_path_str(inst.def_id()) }
+        }
+
         /// Returns coverage summary info for a function, after executing the `InstrumentCoverage`
         /// MIR pass (assuming the -Zinstrument-coverage option is enabled).
         query coverageinfo(key: DefId) -> mir::CoverageInfo {
