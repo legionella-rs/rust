@@ -369,6 +369,13 @@ pub fn check_intrinsic_type(tcx: TyCtxt<'_>, it: &hir::ForeignItem<'_>) {
 
             sym::nontemporal_store => (1, vec![tcx.mk_mut_ptr(param(0)), param(0)], tcx.mk_unit()),
 
+            sym::amdgcn_dispatch_ptr => {
+                (0, vec![], tcx.mk_imm_ptr(tcx.types.u8))
+            }
+            sym::amdgcn_queue_ptr => {
+                (0, vec![], tcx.mk_imm_ptr(tcx.types.u8))
+            }
+
             other => {
                 tcx.sess.emit_err(UnrecognizedIntrinsicFunction { span: it.span, name: other });
                 return;
