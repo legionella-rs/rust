@@ -943,6 +943,8 @@ options! {DebuggingOptions, DebuggingSetter, basic_debugging_options,
         for example: `-Z self-profile-events=default,query-keys`
         all options: none, all, default, generic-activity, query-provider, query-cache-hit
                      query-blocked, incr-cache-load, query-keys, function-args, args, llvm"),
+    polly: bool = (false, parse_bool, [UNTRACKED], "Run the Polly polyhedral \
+           model optimization passes."),
     emit_stack_sizes: bool = (false, parse_bool, [UNTRACKED],
         "emits a section containing stack size metadata"),
     plt: Option<bool> = (None, parse_opt_bool, [TRACKED],
