@@ -522,6 +522,8 @@ pub enum Conv {
     X86_64Win64,
 
     AmdGpuKernel,
+
+    SpirKernel,
 }
 
 /// Metadata describing how the arguments to a native function
