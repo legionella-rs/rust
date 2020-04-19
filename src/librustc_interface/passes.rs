@@ -692,6 +692,7 @@ pub fn default_provide(providers: &mut ty::query::Providers<'_>) {
     rustc_lint::provide(providers);
     rustc_symbol_mangling::provide(providers);
     rustc_codegen_ssa::provide(providers);
+    rustc_geobacter::intrinsics::provide(providers);
 }
 
 pub fn default_provide_extern(providers: &mut ty::query::Providers<'_>) {

@@ -840,6 +840,7 @@ impl Step for Analysis {
         }
 
         builder.ensure(compile::Std { compiler, target });
+        builder.ensure(compile::GeobacterRuntime { compiler, target });
 
         let image = tmpdir(builder).join(format!("{}-{}-image", name, target));
 
@@ -993,6 +994,7 @@ impl Step for Src {
             "src/libpanic_abort",
             "src/libpanic_unwind",
             "src/libstd",
+            "src/libgeobacter",
             "src/libunwind",
             "src/libtest",
             "src/libterm",
