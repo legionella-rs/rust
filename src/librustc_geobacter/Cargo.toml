@@ -11,11 +11,14 @@ doctest = false
 
 [dependencies]
 log = "0.4"
+smallvec = { version = "1.0", features = ["union", "may_dangle"] }
 rustc_ast = { path = "../librustc_ast" }
 rustc_data_structures = { path = "../librustc_data_structures" }
+rustc_errors = { path = "../librustc_errors" }
 rustc_hir = { path = "../librustc_hir" }
 rustc_index = { path = "../librustc_index" }
 rustc_middle = { path = "../librustc_middle" }
+rustc_mir = { path = "../librustc_mir" }
 rustc_serialize = { path = "../libserialize", package = "serialize" }
 rustc_session = { path = "../librustc_session" }
 rustc_span = { path = "../librustc_span" }

@@ -51,8 +51,8 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
     }
 
     fn mk_static_str_operand(&self,
-                                 src: &mir::SourceInfo,
-                                 v: &str)
+                             src: &mir::SourceInfo,
+                             v: &str)
                                  -> Operand<'tcx>
     {
         let tcx = self.tcx();
@@ -75,9 +75,9 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
     }
 
     fn mk_u64_operand(&self,
-                          src: &mir::SourceInfo,
-                          v: u64)
-                          -> Operand<'tcx>
+                      src: &mir::SourceInfo,
+                      v: u64)
+                      -> Operand<'tcx>
     {
         let tcx = self.tcx();
         let v = self.mk_u64_cv(v);
@@ -95,8 +95,8 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
     }
 
     fn mk_optional<F, T>(&self,
-                             val: Option<T>,
-                             some_val: F) -> ConstValue<'tcx>
+                         val: Option<T>,
+                         some_val: F) -> ConstValue<'tcx>
         where F: FnOnce(TyCtxt<'tcx>, T) -> ConstValue<'tcx>,
     {
         let tcx = self.tcx();
@@ -161,8 +161,21 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
         }
     }
 
+    fn mk_static_slice_cv<I>(&self, what: &str,
+                             elems: I, ty: Ty<'tcx>,
+                             len: usize) -> ConstValue<'tcx>
+        where I: ExactSizeIterator<Item = ConstValue<'tcx>>,
+    {
+        let (_, alloc, _) = self.static_tuple_alloc(what, elems, ty);
+        ConstValue::Slice {
+            data: alloc,
+            start: 0,
+            end: len,
+        }
+    }
+
     fn mk_static_tuple_cv<I>(&self, what: &str,
-                                 tuple: I, ty: Ty<'tcx>) -> ConstValue<'tcx>
+                             tuple: I, ty: Ty<'tcx>) -> ConstValue<'tcx>
         where I: ExactSizeIterator<Item = ConstValue<'tcx>>,
     {
         let (alloc_id, ..) = self.static_tuple_alloc(what, tuple, ty);
@@ -172,8 +185,8 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
     }
 
     fn static_tuple_alloc<I>(&self, what: &str,
-                                 tuple: I, ty: Ty<'tcx>)
-                                 -> (AllocId, &'tcx Allocation, Size)
+                             tuple: I, ty: Ty<'tcx>)
+                             -> (AllocId, &'tcx Allocation, Size)
         where I: ExactSizeIterator<Item = ConstValue<'tcx>>,
     {
         let tcx = self.tcx();
@@ -202,8 +215,8 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
     }
 
     fn write_static_tuple<I>(&self, what: &str, tuple: &mut I,
-                                 alloc_id: AllocId, alloc: &mut Allocation,
-                                 base: Size, ty: Ty<'tcx>)
+                             alloc_id: AllocId, alloc: &mut Allocation,
+                             base: Size, ty: Ty<'tcx>)
         where I: ExactSizeIterator<Item = (usize, ConstValue<'tcx>)>,
     {
         let tcx = self.tcx();
@@ -243,6 +256,7 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
         };
 
         for (mut offset, field_ty) in fields.into_iter().zip(ty_fields) {
+            log::info!("{}: offset = {}, field_ty = {:?}", what, (base + offset).bytes(), field_ty);
             match field_ty.kind {
                 Tuple(_) => {
                     self.write_static_tuple(what, tuple, alloc_id, alloc,
@@ -260,8 +274,7 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
             let (index, element) = tuple.next()
                 .expect("missing tuple field value");
 
-            log::trace!("write tuple: {}, index {} at offset {}, ty: {:?}",
-                   what, index, (base + offset).bytes(), field_ty);
+            log::info!("{}: index = {}, element = {:?}", what, index, element);
 
             let mut write_scalar = |scalar| {
                 let ptr = Pointer::new(alloc_id, base + offset);
