@@ -1,7 +1,9 @@
 use crate::geobacter::intrinsics::*;
+use crate::intrinsics::transmute;
 use crate::marker::Copy;
 use crate::mem::size_of;
 use super::{DispatchPacket, ensure_amdgpu};
+use crate::raw::TraitObject;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Axis {
@@ -316,18 +318,6 @@ impl ReadFirstLane for isize {
         }
     }
 }
-impl ReadFirstLane for i64 {
-    #[inline(always)]
-    unsafe fn read_first_lane(self) -> Self {
-        unsafe {
-            let v: [u32; size_of::<Self>() / size_of::<u32>()]
-                = crate::mem::transmute(self);
-            let v = v.read_first_lane();
-            crate::mem::transmute(v)
-        }
-    }
-}
-
 #[cfg(target_pointer_width = "64")]
 impl ReadFirstLane for isize {
     #[inline(always)]
@@ -338,18 +328,6 @@ impl ReadFirstLane for isize {
         }
     }
 }
-impl ReadFirstLane for i128 {
-    #[inline(always)]
-    unsafe fn read_first_lane(self) -> Self {
-        unsafe {
-            let v: [u32; size_of::<Self>() / size_of::<u32>()]
-                = crate::mem::transmute(self);
-            let v = v.read_first_lane();
-            crate::mem::transmute(v)
-        }
-    }
-}
-
 impl ReadFirstLane for u8 {
     #[inline(always)]
     unsafe fn read_first_lane(self) -> Self {
@@ -379,18 +357,6 @@ impl ReadFirstLane for usize {
         }
     }
 }
-impl ReadFirstLane for u64 {
-    #[inline(always)]
-    unsafe fn read_first_lane(self) -> Self {
-        unsafe {
-            let v: [u32; size_of::<Self>() / size_of::<u32>()]
-                = crate::mem::transmute(self);
-            let v = v.read_first_lane();
-            crate::mem::transmute(v)
-        }
-    }
-}
-
 #[cfg(target_pointer_width = "64")]
 impl ReadFirstLane for usize {
     #[inline(always)]
@@ -401,26 +367,29 @@ impl ReadFirstLane for usize {
         }
     }
 }
-impl ReadFirstLane for u128 {
-    #[inline(always)]
-    unsafe fn read_first_lane(self) -> Self {
-        unsafe {
-            let v: [u32; size_of::<Self>() / size_of::<u32>()]
-                = crate::mem::transmute(self);
-            let v = v.read_first_lane();
-            crate::mem::transmute(v)
-        }
-    }
+
+macro_rules! impl_read_first_lane_u32x {
+  ($($ty:ty,)*) => {$(
+      impl ReadFirstLane for $ty {
+          #[inline(always)]
+          unsafe fn read_first_lane(self) -> Self {
+              unsafe {
+                  let v: [u32; size_of::<$ty>() / size_of::<u32>()]
+                      = crate::mem::transmute(self);
+                  let v = v.read_first_lane();
+                  crate::mem::transmute(v)
+              }
+          }
+      }
+  )*};
 }
+impl_read_first_lane_u32x!(i64, i128, u64, u128, );
 
 impl<T> ReadFirstLane for *const T {
     #[inline(always)]
     unsafe fn read_first_lane(self) -> Self {
         unsafe {
-            let v: [u32; size_of::<Self>() / size_of::<u32>()]
-                = crate::mem::transmute(self);
-            let v = v.read_first_lane();
-            crate::mem::transmute(v)
+            (self as usize).read_first_lane() as Self
         }
     }
 }
@@ -428,10 +397,7 @@ impl<T> ReadFirstLane for *mut T {
     #[inline(always)]
     unsafe fn read_first_lane(self) -> Self {
         unsafe {
-            let v: [u32; size_of::<Self>() / size_of::<u32>()]
-                = crate::mem::transmute(self);
-            let v = v.read_first_lane();
-            crate::mem::transmute(v)
+            (self as usize).read_first_lane() as Self
         }
     }
 }
@@ -440,10 +406,12 @@ impl<T> ReadFirstLane for *const [T] {
     #[inline(always)]
     unsafe fn read_first_lane(self) -> Self {
         unsafe {
-            let v: [u32; size_of::<Self>() / size_of::<u32>()]
-                = crate::mem::transmute(self);
-            let v = v.read_first_lane();
-            crate::mem::transmute(v)
+            let this: TraitObject = transmute(self);
+            let this = TraitObject {
+                data: this.data.read_first_lane(),
+                vtable: this.vtable.read_first_lane(),
+            };
+            transmute(this)
         }
     }
 }
@@ -451,10 +419,12 @@ impl<T> ReadFirstLane for *mut [T] {
     #[inline(always)]
     unsafe fn read_first_lane(self) -> Self {
         unsafe {
-            let v: [u32; size_of::<Self>() / size_of::<u32>()]
-                = crate::mem::transmute(self);
-            let v = v.read_first_lane();
-            crate::mem::transmute(v)
+            let this: TraitObject = transmute(self);
+            let this = TraitObject {
+                data: this.data.read_first_lane(),
+                vtable: this.vtable.read_first_lane(),
+            };
+            transmute(this)
         }
     }
 }
@@ -469,10 +439,6 @@ impl<'a, T> ReadFirstLane for &'a T {
 impl<'a, T> ReadFirstLane for &'a [T] {
     #[inline(always)]
     unsafe fn read_first_lane(self) -> Self {
-        unsafe {
-            let ptr = self.as_ptr().read_first_lane();
-            let len = self.len().read_first_lane();
-            crate::slice::from_raw_parts(ptr, len)
-        }
+        unsafe { &*(self as *const [T]).read_first_lane() }
     }
 }

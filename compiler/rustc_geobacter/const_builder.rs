@@ -10,7 +10,7 @@ use rustc_middle::ty::{Array, Const, ConstKind, ParamEnv, Tuple};
 use rustc_middle::ty::layout::HasTyCtxt;
 use rustc_target::abi::{Align, FieldsShape, HasDataLayout, Size};
 
-use tracing::{event, Level};
+use tracing::info;
 
 pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
     fn mk_const_op(&self,
@@ -163,6 +163,19 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
         }
     }
 
+    fn mk_static_slice_cv<I>(&self, what: &str,
+                             elems: I, ty: Ty<'tcx>,
+                             len: usize) -> ConstValue<'tcx>
+        where I: ExactSizeIterator<Item = ConstValue<'tcx>>,
+    {
+        let (_, alloc, _) = self.static_tuple_alloc(what, elems, ty);
+        ConstValue::Slice {
+            data: alloc,
+            start: 0,
+            end: len,
+        }
+    }
+
     fn mk_static_tuple_cv<I>(&self, what: &str,
                              tuple: I, ty: Ty<'tcx>) -> ConstValue<'tcx>
         where I: ExactSizeIterator<Item=ConstValue<'tcx>>,
@@ -245,6 +258,7 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
         };
 
         for (mut offset, field_ty) in fields.into_iter().zip(ty_fields) {
+            info!("{}: offset = {}, field_ty = {:?}", what, (base + offset).bytes(), field_ty);
             match field_ty.kind() {
                 Tuple(_) => {
                     self.write_static_tuple(what, tuple, alloc_id, alloc,
@@ -262,8 +276,7 @@ pub trait TyCtxtConstBuilder<'tcx>: HasTyCtxt<'tcx> {
             let (index, element) = tuple.next()
                 .expect("missing tuple field value");
 
-            event!(Level::DEBUG, "write tuple: {}, index {} at offset {}, ty: {:?}",
-                   what, index, (base + offset).bytes(), field_ty);
+            info!("{}: index = {}, element = {:?}", what, index, element);
 
             let mut write_scalar = |scalar| {
                 let ptr = Pointer::new(alloc_id, base + offset);
