@@ -16,6 +16,7 @@ use rustc_serialize::Decodable;
 use crate::codec::GeobacterDecoder;
 
 pub mod codec;
+pub mod collector;
 pub mod intrinsics;
 pub mod const_builder;
 pub mod mir_builder;

@@ -257,4 +257,15 @@ language_item_table! {
 
     Arc,                         "arc",                arc,                     Target::Struct;
     Rc,                          "rc",                 rc,                      Target::Struct;
+
+    // Geobacter lang items:
+    SpirvBuiltin,                "spirv_builtin",      spirv_builtin_ty,        Target::Struct;
+    SpirvInput,                  "spirv_input",        spirv_input_ty,          Target::Struct;
+    SpirvOutput,                 "spirv_output",       spirv_output_ty,         Target::Struct;
+    SpirvShaderInput,            "spirv_shader_input", spirv_shader_input_ty,   Target::Struct;
+    SpirvShaderOutput,           "spirv_shader_output",spirv_shader_output_ty,  Target::Struct;
+    SpirvBufferObject,           "spirv_buffer_object",spirv_buffer_object_ty,  Target::Struct;
+    SpirvUniformObject,          "spirv_uniform_object",spirv_uniform_object_ty,Target::Struct;
+    SpirvTexture,                "spirv_texture",      spirv_texture_ty,        Target::Struct;
+    SpirvSampler,                "spirv_sampler",      spirv_sampler_ty,        Target::Struct;
 }
