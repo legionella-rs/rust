@@ -9,6 +9,7 @@
 pub mod amdgpu;
 #[cfg(stage2)]
 pub mod cuda;
+pub mod spirv;
 
 #[cfg(not(bootstrap))]
 pub mod intrinsics;
