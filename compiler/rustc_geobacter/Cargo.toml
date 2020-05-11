@@ -11,12 +11,15 @@ doctest = false
 
 [dependencies]
 tracing = "0.1"
+smallvec = { version = "1.0", features = ["union", "may_dangle"] }
 rustc_ast = { path = "../rustc_ast" }
 rustc_data_structures = { path = "../rustc_data_structures" }
+rustc_errors = { path = "../rustc_errors" }
 rustc_hir = { path = "../rustc_hir" }
 rustc_index = { path = "../rustc_index" }
 rustc_macros = { path = "../rustc_macros" }
 rustc_middle = { path = "../rustc_middle" }
+rustc_mir = { path = "../rustc_mir" }
 rustc_serialize = { path = "../rustc_serialize" }
 rustc_session = { path = "../rustc_session" }
 rustc_span = { path = "../rustc_span" }

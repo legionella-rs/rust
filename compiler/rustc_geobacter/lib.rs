@@ -5,6 +5,7 @@
 #![feature(intrinsics)]
 #![feature(link_llvm_intrinsics)]
 #![feature(never_type)]
+#![feature(or_patterns)]
 
 #[macro_use]
 extern crate rustc_macros;
@@ -22,6 +23,7 @@ use tracing::trace;
 use crate::codec::GeobacterDecoder;
 
 pub mod codec;
+pub mod collector;
 pub mod intrinsics;
 pub mod const_builder;
 pub mod mir_builder;
