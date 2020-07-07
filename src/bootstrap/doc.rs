@@ -426,6 +426,89 @@ impl Step for Std {
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct GeobacterRuntime {
+    pub stage: u32,
+    pub target: Interned<String>,
+}
+
+impl Step for GeobacterRuntime {
+    type Output = ();
+    const DEFAULT: bool = true;
+
+    fn should_run(run: ShouldRun<'_>) -> ShouldRun<'_> {
+        let builder = run.builder;
+        run.all_krates("test").default_condition(builder.config.docs)
+    }
+
+    fn make_run(run: RunConfig<'_>) {
+        run.builder.ensure(GeobacterRuntime { stage: run.builder.top_stage, target: run.target });
+    }
+
+    /// Compile all standard library documentation.
+    ///
+    /// This will generate all documentation for the standard library and its
+    /// dependencies. This is largely just a wrapper around `cargo doc`.
+    fn run(self, builder: &Builder<'_>) {
+        let stage = self.stage;
+        let target = self.target;
+        builder.info(&format!("Documenting stage{} geobacter-runtime ({})", stage, target));
+        let out = builder.doc_out(target);
+        t!(fs::create_dir_all(&out));
+        let compiler = builder.compiler(stage, builder.config.build);
+
+        builder.ensure(compile::GeobacterRuntime { compiler, target });
+        let out_dir = builder.stage_out(compiler, Mode::Std).join(target).join("doc");
+
+        // Here what we're doing is creating a *symlink* (directory junction on
+        // Windows) to the final output location. This is not done as an
+        // optimization but rather for correctness. We've got three trees of
+        // documentation, one for std, one for test, and one for rustc. It's then
+        // our job to merge them all together.
+        //
+        // Unfortunately rustbuild doesn't know nearly as well how to merge doc
+        // trees as rustdoc does itself, so instead of actually having three
+        // separate trees we just have rustdoc output to the same location across
+        // all of them.
+        //
+        // This way rustdoc generates output directly into the output, and rustdoc
+        // will also directly handle merging.
+        let my_out = builder.crate_doc_out(target);
+        t!(symlink_dir_force(&builder.config, &my_out, &out_dir));
+        t!(fs::copy(builder.src.join("src/doc/rust.css"), out.join("rust.css")));
+
+        let run_cargo_rustdoc_for = |package: &str| {
+            let mut cargo = builder.cargo(compiler, Mode::Std, target, "rustdoc");
+
+            // Keep a whitelist so we do not build internal stdlib crates, these will be
+            // build by the rustc step later if enabled.
+            cargo.arg("-p").arg(package);
+            // Create all crate output directories first to make sure rustdoc uses
+            // relative links.
+            // FIXME: Cargo should probably do this itself.
+            t!(fs::create_dir_all(out_dir.join(package)));
+            cargo
+                .arg("--")
+                .arg("--markdown-css")
+                .arg("rust.css")
+                .arg("--markdown-no-toc")
+                .arg("--generate-redirect-pages")
+                .arg("-Z")
+                .arg("unstable-options")
+                .arg("--resource-suffix")
+                .arg(crate::channel::CFG_RELEASE_NUM)
+                .arg("--index-page")
+                .arg(&builder.src.join("src/doc/index.md"));
+
+            builder.run(&mut cargo.into());
+        };
+        for krate in &["alloc", "core", "std", "proc_macro", "test"] {
+            run_cargo_rustdoc_for(krate);
+        }
+        builder.cp_r(&my_out, &out);
+    }
+}
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct Rustc {
     stage: u32,
     target: Interned<String>,
