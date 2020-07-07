@@ -28,7 +28,7 @@ pub struct Globals {
 }
 
 impl Globals {
-    fn new(edition: Edition) -> Globals {
+    pub fn new(edition: Edition) -> Globals {
         Globals {
             // We have no idea how many attributes there will be, so just
             // initiate the vectors with 0 bits. We'll grow them as necessary.
@@ -36,6 +36,9 @@ impl Globals {
             known_attrs: Lock::new(GrowableBitSet::new_empty()),
             rustc_span_globals: rustc_span::Globals::new(edition),
         }
+    }
+    pub fn with<R>(&self, f: impl FnOnce() -> R) -> R {
+        GLOBALS.set(self, || rustc_span::GLOBALS.set(&self.rustc_span_globals, f))
     }
 }
 
