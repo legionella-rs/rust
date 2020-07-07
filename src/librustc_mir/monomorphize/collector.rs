@@ -219,7 +219,7 @@ pub struct InliningMap<'tcx> {
 }
 
 impl<'tcx> InliningMap<'tcx> {
-    fn new() -> InliningMap<'tcx> {
+    pub fn new() -> InliningMap<'tcx> {
         InliningMap {
             index: FxHashMap::default(),
             targets: Vec::new(),
@@ -227,7 +227,7 @@ impl<'tcx> InliningMap<'tcx> {
         }
     }
 
-    fn record_accesses(&mut self, source: MonoItem<'tcx>, new_targets: &[(MonoItem<'tcx>, bool)]) {
+   pub fn record_accesses(&mut self, source: MonoItem<'tcx>, new_targets: &[(MonoItem<'tcx>, bool)]) {
         let start_index = self.targets.len();
         let new_items_count = new_targets.len();
         let new_items_count_total = new_items_count + self.targets.len();
