@@ -48,17 +48,17 @@ pub use cstore_impl::{provide, provide_extern};
 
 mod cstore_impl;
 
-crate struct MetadataBlob(MetadataRef);
+pub struct MetadataBlob(MetadataRef);
 
 // A map from external crate numbers (as decoded from some crate file) to
 // local crate numbers (as generated during this session). Each external
 // crate may refer to types in other external crates, and each has their
 // own crate numbers.
-crate type CrateNumMap = IndexVec<CrateNum, CrateNum>;
+pub type CrateNumMap = IndexVec<CrateNum, CrateNum>;
 
-crate struct CrateMetadata {
+pub struct CrateMetadata {
     /// The primary crate data - binary metadata blob.
-    blob: MetadataBlob,
+    pub blob: MetadataBlob,
 
     // --- Some data pre-decoded from the metadata blob, usually for performance ---
     /// Properties of the whole crate.
@@ -66,56 +66,56 @@ crate struct CrateMetadata {
     /// lifetime is only used behind `Lazy`, and therefore acts like an
     /// universal (`for<'tcx>`), that is paired up with whichever `TyCtxt`
     /// is being used to decode those values.
-    root: CrateRoot<'static>,
+    pub root: CrateRoot<'static>,
     /// For each definition in this crate, we encode a key. When the
     /// crate is loaded, we read all the keys and put them in this
     /// hashmap, which gives the reverse mapping. This allows us to
     /// quickly retrace a `DefPath`, which is needed for incremental
     /// compilation support.
-    def_path_table: DefPathTable,
+    pub def_path_table: DefPathTable,
     /// Trait impl data.
     /// FIXME: Used only from queries and can use query cache,
     /// so pre-decoding can probably be avoided.
-    trait_impls: FxHashMap<(u32, DefIndex), Lazy<[DefIndex]>>,
+    pub trait_impls: FxHashMap<(u32, DefIndex), Lazy<[DefIndex]>>,
     /// Proc macro descriptions for this crate, if it's a proc macro crate.
-    raw_proc_macros: Option<&'static [ProcMacro]>,
+    pub raw_proc_macros: Option<&'static [ProcMacro]>,
     /// Source maps for code from the crate.
-    source_map_import_info: Once<Vec<ImportedSourceFile>>,
+    pub source_map_import_info: Once<Vec<ImportedSourceFile>>,
     /// Used for decoding interpret::AllocIds in a cached & thread-safe manner.
-    alloc_decoding_state: AllocDecodingState,
+    pub alloc_decoding_state: AllocDecodingState,
     /// The `DepNodeIndex` of the `DepNode` representing this upstream crate.
     /// It is initialized on the first access in `get_crate_dep_node_index()`.
     /// Do not access the value directly, as it might not have been initialized yet.
     /// The field must always be initialized to `DepNodeIndex::INVALID`.
-    dep_node_index: AtomicCell<DepNodeIndex>,
+    pub dep_node_index: AtomicCell<DepNodeIndex>,
 
     // --- Other significant crate properties ---
     /// ID of this crate, from the current compilation session's point of view.
-    cnum: CrateNum,
+    pub cnum: CrateNum,
     /// Maps crate IDs as they are were seen from this crate's compilation sessions into
     /// IDs as they are seen from the current compilation session.
-    cnum_map: CrateNumMap,
+    pub cnum_map: CrateNumMap,
     /// Same ID set as `cnum_map` plus maybe some injected crates like panic runtime.
-    dependencies: Lock<Vec<CrateNum>>,
+    pub dependencies: Lock<Vec<CrateNum>>,
     /// How to link (or not link) this crate to the currently compiled crate.
-    dep_kind: Lock<DepKind>,
+    pub dep_kind: Lock<DepKind>,
     /// Filesystem location of this crate.
-    source: CrateSource,
+    pub source: CrateSource,
     /// Whether or not this crate should be consider a private dependency
     /// for purposes of the 'exported_private_dependencies' lint
-    private_dep: bool,
+    pub private_dep: bool,
     /// The hash for the host proc macro. Used to support `-Z dual-proc-macro`.
-    host_hash: Option<Svh>,
+    pub host_hash: Option<Svh>,
 
     // --- Data used only for improving diagnostics ---
     /// Information about the `extern crate` item or path that caused this crate to be loaded.
     /// If this is `None`, then the crate was injected (e.g., by the allocator).
-    extern_crate: Lock<Option<ExternCrate>>,
+    pub extern_crate: Lock<Option<ExternCrate>>,
 }
 
 /// Holds information about a rustc_span::SourceFile imported from another crate.
 /// See `imported_source_files()` for more information.
-struct ImportedSourceFile {
+pub struct ImportedSourceFile {
     /// This SourceFile's byte-offset within the source_map of its original crate
     original_start_pos: rustc_span::BytePos,
     /// The end of this SourceFile within the source_map of its original crate
@@ -124,7 +124,7 @@ struct ImportedSourceFile {
     translated_source_file: Lrc<rustc_span::SourceFile>,
 }
 
-pub(super) struct DecodeContext<'a, 'tcx> {
+pub struct DecodeContext<'a, 'tcx> {
     opaque: opaque::Decoder<'a>,
     cdata: Option<CrateMetadataRef<'a>>,
     sess: Option<&'tcx Session>,
@@ -140,7 +140,7 @@ pub(super) struct DecodeContext<'a, 'tcx> {
 }
 
 /// Abstract over the various ways one can create metadata decoders.
-pub(super) trait Metadata<'a, 'tcx>: Copy {
+pub trait Metadata<'a, 'tcx>: Copy {
     fn raw_bytes(self) -> &'a [u8];
     fn cdata(self) -> Option<CrateMetadataRef<'a>> {
         None
@@ -220,7 +220,7 @@ impl<'a, 'tcx> Metadata<'a, 'tcx> for (&'a CrateMetadataRef<'a>, TyCtxt<'tcx>) {
 }
 
 impl<'a, 'tcx, T: Decodable> Lazy<T> {
-    fn decode<M: Metadata<'a, 'tcx>>(self, metadata: M) -> T {
+    pub fn decode<M: Metadata<'a, 'tcx>>(self, metadata: M) -> T {
         let mut dcx = metadata.decoder(self.position.get());
         dcx.lazy_state = LazyState::NodeStart(self.position);
         T::decode(&mut dcx).unwrap()
@@ -228,7 +228,7 @@ impl<'a, 'tcx, T: Decodable> Lazy<T> {
 }
 
 impl<'a: 'x, 'tcx: 'x, 'x, T: Decodable> Lazy<[T]> {
-    fn decode<M: Metadata<'a, 'tcx>>(
+    pub fn decode<M: Metadata<'a, 'tcx>>(
         self,
         metadata: M,
     ) -> impl ExactSizeIterator<Item = T> + Captures<'a> + Captures<'tcx> + 'x {
@@ -528,20 +528,20 @@ impl<'a, 'tcx, T: Decodable> SpecializedDecoder<mir::ClearCrossCrate<T>>
 implement_ty_decoder!(DecodeContext<'a, 'tcx>);
 
 impl MetadataBlob {
-    crate fn new(metadata_ref: MetadataRef) -> MetadataBlob {
+    pub fn new(metadata_ref: MetadataRef) -> MetadataBlob {
         MetadataBlob(metadata_ref)
     }
 
-    crate fn is_compatible(&self) -> bool {
+    pub fn is_compatible(&self) -> bool {
         self.raw_bytes().starts_with(METADATA_HEADER)
     }
 
-    crate fn get_rustc_version(&self) -> String {
+    pub fn get_rustc_version(&self) -> String {
         Lazy::<String>::from_position(NonZeroUsize::new(METADATA_HEADER.len() + 4).unwrap())
             .decode(self)
     }
 
-    crate fn get_root(&self) -> CrateRoot<'tcx> {
+    pub fn get_root(&self) -> CrateRoot<'tcx> {
         let slice = self.raw_bytes();
         let offset = METADATA_HEADER.len();
         let pos = (((slice[offset + 0] as u32) << 24)
@@ -604,7 +604,7 @@ impl CrateRoot<'_> {
         self.proc_macro_data.is_some()
     }
 
-    crate fn name(&self) -> Symbol {
+    pub fn name(&self) -> Symbol {
         self.name
     }
 
@@ -612,7 +612,7 @@ impl CrateRoot<'_> {
         self.disambiguator
     }
 
-    crate fn hash(&self) -> Svh {
+    pub fn hash(&self) -> Svh {
         self.hash
     }
 
@@ -620,7 +620,7 @@ impl CrateRoot<'_> {
         &self.triple
     }
 
-    crate fn decode_crate_deps(
+    pub fn decode_crate_deps(
         &self,
         metadata: &'a MetadataBlob,
     ) -> impl ExactSizeIterator<Item = CrateDep> + Captures<'a> {
