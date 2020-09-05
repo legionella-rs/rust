@@ -28,6 +28,10 @@
 extern crate log;
 #[macro_use]
 extern crate cfg_if;
+#[cfg(parallel_compiler)]
+pub extern crate rayon;
+#[cfg(parallel_compiler)]
+pub extern crate rayon_core;
 
 pub use rustc_serialize::hex::ToHex;
 
