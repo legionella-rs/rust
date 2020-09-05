@@ -5,6 +5,7 @@ members = [
   "src/libstd",
   "src/libtest",
   "src/librustc_codegen_llvm",
+  "src/libgeobacter",
   "src/tools/cargotest",
   "src/tools/clippy",
   "src/tools/compiletest",
