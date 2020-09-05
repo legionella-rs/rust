@@ -206,6 +206,19 @@ impl<'a> CrateLoader<'a> {
             cstore: CStore::default(),
         }
     }
+    pub fn new_from_cstore(
+        sess: &'a Session,
+        metadata_loader: &'a MetadataLoaderDyn,
+        local_crate_name: &str,
+        cstore: CStore,
+    ) -> Self {
+        CrateLoader {
+            sess,
+            metadata_loader,
+            local_crate_name: Symbol::intern(local_crate_name),
+            cstore,
+        }
+    }
 
     pub fn cstore(&self) -> &CStore {
         &self.cstore
