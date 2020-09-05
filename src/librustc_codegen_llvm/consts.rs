@@ -74,7 +74,18 @@ pub fn const_alloc_to_llvm(cx: &CodegenCx<'ll, '_>, alloc: &Allocation) -> &'ll 
         llvals.push(cx.const_bytes(bytes));
     }
 
-    cx.const_struct(&llvals, true)
+    let out = cx.const_struct(&llvals, true);
+
+    if alloc.relocations().len() == 0 {
+        let umask = alloc.undef_mask();
+        if (0..alloc.len()).all(|i| !umask.get(Size::from_bytes(i)) ) {
+            // use a real undef value:
+            let ty = crate::common::val_ty(out);
+            return cx.const_undef(ty);
+        }
+    }
+
+    out
 }
 
 pub fn codegen_static_initializer(
