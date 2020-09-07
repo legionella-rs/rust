@@ -80,7 +80,7 @@ mod windows_msvc_base;
 mod windows_uwp_gnu_base;
 mod windows_uwp_msvc_base;
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub enum LinkerFlavor {
     Em,
     Gcc,
@@ -90,7 +90,7 @@ pub enum LinkerFlavor {
     PtxLinker,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub enum LldFlavor {
     Wasm,
     Ld64,
