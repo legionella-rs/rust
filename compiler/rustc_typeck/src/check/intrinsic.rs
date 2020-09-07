@@ -1,18 +1,18 @@
 //! Type-checking for the rust-intrinsic and platform-intrinsic
 //! intrinsics that the compiler exposes.
 
-use crate::require_same_types;
+use std::iter;
 
 use rustc_errors::struct_span_err;
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_middle::traits::{ObligationCause, ObligationCauseCode};
-use rustc_middle::ty::subst::Subst;
 use rustc_middle::ty::{self, Ty, TyCtxt};
+use rustc_middle::ty::subst::Subst;
 use rustc_span::symbol::{kw, sym, Symbol};
 use rustc_target::spec::abi::Abi;
 
-use std::iter;
+use crate::require_same_types;
 
 fn equate_intrinsic_type<'tcx>(
     tcx: TyCtxt<'tcx>,
@@ -50,8 +50,8 @@ fn equate_intrinsic_type<'tcx>(
             i_n_tps,
             n_tps
         )
-        .span_label(span, format!("expected {} type parameter", n_tps))
-        .emit();
+            .span_label(span, format!("expected {} type parameter", n_tps))
+            .emit();
         return;
     }
 
@@ -159,6 +159,9 @@ pub fn check_intrinsic_type(tcx: TyCtxt<'_>, it: &hir::ForeignItem<'_>) {
             }
         };
         (n_tps, inputs, output, hir::Unsafety::Unsafe)
+    } else if name_str.starts_with("atomic_scoped_fence_") {
+        // We don't check the scope here as that's "OS" defined.
+        (0, Vec::new(), tcx.mk_unit(), hir::Unsafety::Unsafe)
     } else {
         let unsafety = intrinsic_operation_unsafety(intrinsic_name);
         let (n_tps, inputs, output) = match intrinsic_name {
@@ -488,7 +491,7 @@ pub fn check_platform_intrinsic_type(tcx: TyCtxt<'_>, it: &hir::ForeignItem<'_>)
                         "invalid `simd_shuffle`, needs length: `{}`",
                         name
                     )
-                    .emit();
+                        .emit();
                     return;
                 }
             }
