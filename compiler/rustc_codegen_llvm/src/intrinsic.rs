@@ -7,8 +7,6 @@ use crate::type_of::LayoutLlvmExt;
 use crate::va_arg::emit_va_arg;
 use crate::value::Value;
 
-use libc::c_char;
-
 use rustc_ast as ast;
 use rustc_codegen_ssa::base::{compare_simd_types, wants_msvc_seh};
 use rustc_codegen_ssa::common::span_invalid_monomorphization_error;
@@ -27,7 +25,6 @@ use rustc_target::abi::{self, HasDataLayout, LayoutOf, Primitive};
 use rustc_target::spec::PanicStrategy;
 
 use std::cmp::Ordering;
-use std::ffi::CStr;
 use std::iter;
 
 fn get_simple_intrinsic(cx: &CodegenCx<'ll, '_>, name: Symbol) -> Option<&'ll Value> {
@@ -80,9 +77,6 @@ fn get_simple_intrinsic(cx: &CodegenCx<'ll, '_>, name: Symbol) -> Option<&'ll Va
     };
     Some(cx.get_intrinsic(&llvm_name))
 }
-
-const EMPTY_C_STR: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"\0") };
-const UNNAMED: *const c_char = EMPTY_C_STR.as_ptr();
 
 impl IntrinsicCallMethods<'tcx> for Builder<'a, 'll, 'tcx> {
     fn codegen_intrinsic_call(
@@ -737,6 +731,23 @@ impl IntrinsicCallMethods<'tcx> for Builder<'a, 'll, 'tcx> {
                 return;
             }
 
+            sym::amdgcn_dispatch_ptr => {
+                // This intrinsic returns a pointer in the const addr space
+                // which can't be encoded in source level Rust.
+
+                let f = self.cx().get_intrinsic("llvm.amdgcn.dispatch.ptr");
+                let val = self.call(f, &[], None);
+                self.flat_addr_cast(val)
+            }
+            sym::amdgcn_queue_ptr => {
+                // This intrinsic returns a pointer in the const addr space
+                // which can't be encoded in source level Rust.
+
+                let f = self.cx().get_intrinsic("llvm.amdgcn.queue.ptr");
+                let val = self.call(f, &[], None);
+                self.flat_addr_cast(val)
+            }
+
             sym::ptr_guaranteed_eq | sym::ptr_guaranteed_ne => {
                 let a = args[0].immediate();
                 let b = args[1].immediate();
@@ -762,26 +773,6 @@ impl IntrinsicCallMethods<'tcx> for Builder<'a, 'll, 'tcx> {
                 let pointee_size = self.const_usize(pointee_size.bytes());
                 // this is where the signed magic happens (notice the `s` in `exactsdiv`)
                 self.exactsdiv(d, pointee_size)
-            }
-            sym::amdgcn_dispatch_ptr => {
-                // This intrinsic returns a pointer in the const addr space
-                // which can't be encoded in source level Rust.
-
-                let f = self.cx().get_intrinsic("llvm.amdgcn.dispatch.ptr");
-                let val = self.call(f, &[], None);
-                // XXX Needs the proper address space patch
-                unsafe { llvm::LLVMBuildAddrSpaceCast(self.llbuilder, val,
-                                                      llret_ty, UNNAMED) }
-            }
-            sym::amdgcn_queue_ptr => {
-                // This intrinsic returns a pointer in the const addr space
-                // which can't be encoded in source level Rust.
-
-                let f = self.cx().get_intrinsic("llvm.amdgcn.queue.ptr");
-                let val = self.call(f, &[], None);
-                // XXX Needs the proper address space patch
-                unsafe { llvm::LLVMBuildAddrSpaceCast(self.llbuilder, val,
-                                                      llret_ty, UNNAMED) }
             }
 
             _ => bug!("unknown intrinsic '{}'", name),
