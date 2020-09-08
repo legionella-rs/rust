@@ -261,6 +261,7 @@
 #![feature(future_readiness_fns)]
 #![feature(gen_future)]
 #![feature(generator_trait)]
+#![feature(geobacter)]
 #![feature(global_asm)]
 #![feature(hash_raw_entry)]
 #![feature(hashmap_internals)]
@@ -399,6 +400,8 @@ pub use core::cmp;
 pub use core::convert;
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use core::default;
+#[unstable(feature = "geobacter", reason = "WIP", issue = "none")]
+pub use core::geobacter;
 #[stable(feature = "rust1", since = "1.0.0")]
 pub use core::hash;
 #[stable(feature = "core_hint", since = "1.27.0")]
