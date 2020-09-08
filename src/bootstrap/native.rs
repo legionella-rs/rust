@@ -169,7 +169,8 @@ impl Step for Llvm {
             .define("LLVM_INCLUDE_TESTS", "OFF")
             .define("LLVM_INCLUDE_DOCS", "OFF")
             .define("LLVM_INCLUDE_BENCHMARKS", "OFF")
-            .define("WITH_POLLY", "OFF")
+            .define("LLVM_ENABLE_ZLIB", "OFF")
+            .define("WITH_POLLY", "ON")
             .define("LLVM_ENABLE_TERMINFO", "OFF")
             .define("LLVM_ENABLE_LIBEDIT", "OFF")
             .define("LLVM_ENABLE_BINDINGS", "OFF")
@@ -194,6 +195,9 @@ impl Step for Llvm {
             // Zlib fails to link properly, leading to a compiler error.
             cfg.define("LLVM_ENABLE_ZLIB", "OFF");
         }
+
+        //let polly_src = builder.src.join("src/llvm-project/polly");
+        //cfg.define("LLVM_EXTERNAL_POLLY_SOURCE_DIR", polly_src);
 
         if builder.config.llvm_thin_lto {
             cfg.define("LLVM_ENABLE_LTO", "Thin");
