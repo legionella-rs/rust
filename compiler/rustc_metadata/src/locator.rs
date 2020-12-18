@@ -213,7 +213,7 @@
 //! metadata::locator or metadata::creader for all the juicy details!
 
 use crate::creader::Library;
-use crate::rmeta::{rustc_version, MetadataBlob, METADATA_HEADER};
+use crate::rmeta::{rustc_version, MetadataBlob, METADATA_HEADER, PREV_METADATA_HEADER};
 
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::owning_ref::OwningRef;
@@ -755,15 +755,46 @@ fn get_metadata_section(
             let header_len = METADATA_HEADER.len();
             debug!("checking {} bytes of metadata-version stamp", header_len);
             let header = &buf[..cmp::min(header_len, buf.len())];
-            if header != METADATA_HEADER {
+
+            let curr_md_ver = if header == METADATA_HEADER {
+                true
+            } else if header == PREV_METADATA_HEADER {
+                false
+            } else {
                 return Err(format!(
                     "incompatible metadata version found: '{}'",
                     filename.display()
                 ));
-            }
+            };
+
+            let compressed_bytes = if curr_md_ver {
+                let ret_decomp_err = || {
+                    Err(format!("failed to decompress metadata: {}", filename.display()))
+                };
+
+                if buf.len() < header_len + 8 {
+                    return ret_decomp_err();
+                }
+
+                // This section could contain more than one compressed metadata section. However,
+                // the metadata for the dylib crate should always be first.
+                // So all we need to do is ensure snappy doesn't attempt to uncompress more than
+                // the first metadata blob (Geobacter uses a more thorough search, but that's
+                // not needed here).
+
+                let mut len_le_bytes = [0u8; 8];
+                len_le_bytes.copy_from_slice(&buf[header_len..header_len + 8]);
+                let compressed_start = header_len + 8;
+                let compressed_end = compressed_start + (u64::from_le_bytes(len_le_bytes) as usize);
+                if compressed_end > buf.len() {
+                    return ret_decomp_err();
+                }
+                &buf[compressed_start..compressed_end]
+            } else {
+                &buf[header_len..]
+            };
 
             // Header is okay -> inflate the actual metadata
-            let compressed_bytes = &buf[header_len..];
             debug!("inflating {} bytes of compressed metadata", compressed_bytes.len());
             let mut inflated = Vec::new();
             match FrameDecoder::new(compressed_bytes).read_to_end(&mut inflated) {
