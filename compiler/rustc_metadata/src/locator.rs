@@ -230,6 +230,7 @@ use rustc_span::Span;
 use rustc_target::spec::{Target, TargetTriple};
 
 use snap::read::FrameDecoder;
+use std::convert::TryInto;
 use std::io::{Read, Result as IoResult, Write};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -768,13 +769,34 @@ fn get_metadata_section(
             };
 
             let compressed_bytes = if curr_md_ver {
-                let ret_decomp_err = || {
-                    Err(format!("failed to decompress metadata: {}", filename.display()))
+                let decomp_err = || {
+                    format!("failed to decompress metadata: {}", filename.display())
                 };
 
-                if buf.len() < header_len + 8 {
-                    return ret_decomp_err();
-                }
+                let check_len = |pos, size| {
+                  if buf.len() < pos + size {
+                      Err(decomp_err())
+                  } else {
+                      Ok(())
+                  }
+                };
+
+                let mut pos = header_len;
+                check_len(pos, 4)?;
+
+                let sym_name_len: usize = {
+                    let mut le_bytes = [0u8; 4];
+                    le_bytes.copy_from_slice(&buf[pos..pos+4]);
+                    u32::from_le_bytes(le_bytes)
+                      .try_into()
+                      .map_err(|_| {
+                          decomp_err()
+                      })?
+                };
+                pos += 4;
+                pos += sym_name_len;
+
+                check_len(pos, 8)?;
 
                 // This section could contain more than one compressed metadata section. However,
                 // the metadata for the dylib crate should always be first.
@@ -783,11 +805,16 @@ fn get_metadata_section(
                 // not needed here).
 
                 let mut len_le_bytes = [0u8; 8];
-                len_le_bytes.copy_from_slice(&buf[header_len..header_len + 8]);
-                let compressed_start = header_len + 8;
-                let compressed_end = compressed_start + (u64::from_le_bytes(len_le_bytes) as usize);
+                len_le_bytes.copy_from_slice(&buf[pos..pos + 8]);
+                let compressed_start = pos + 8;
+                let compressed_len: usize = u64::from_le_bytes(len_le_bytes)
+                  .try_into()
+                  .map_err(|_| {
+                      decomp_err()
+                  })?;
+                let compressed_end = compressed_start + compressed_len;
                 if compressed_end > buf.len() {
-                    return ret_decomp_err();
+                    return Err(decomp_err());
                 }
                 &buf[compressed_start..compressed_end]
             } else {

@@ -51,6 +51,11 @@ pub fn write_compressed_metadata<'tcx>(
     let (metadata_llcx, metadata_llmod) = (&*llvm_module.llcx, llvm_module.llmod());
     let mut compressed = tcx.metadata_encoding_version();
 
+    let sym_name = exported_symbols::metadata_symbol_name(tcx);
+    let sym_name_len = sym_name.len() as u32;
+    compressed.write_all(&sym_name_len.to_le_bytes()).unwrap();
+    compressed.write_all(&sym_name.as_bytes()).unwrap();
+
     let len_pos = compressed.len();
     // Write a length, so that we can still use dylibs downstream. If we don't do this, and
     // `-Z always-export-metadata` is on, decompression will fail (snappy will always try to
@@ -68,8 +73,7 @@ pub fn write_compressed_metadata<'tcx>(
 
     let llmeta = common::bytes_in_context(metadata_llcx, &compressed);
     let llconst = common::struct_in_context(metadata_llcx, &[llmeta], false);
-    let name = exported_symbols::metadata_symbol_name(tcx);
-    let buf = CString::new(name).unwrap();
+    let buf = CString::new(sym_name).unwrap();
     let llglobal =
         unsafe { llvm::LLVMAddGlobal(metadata_llmod, common::val_ty(llconst), buf.as_ptr()) };
     unsafe {
