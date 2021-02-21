@@ -35,27 +35,15 @@ pub mod hsa {
         //===----------------------------------------------------------------------===//
         // GCN GFX8 (Volcanic Islands (VI)).
         //===----------------------------------------------------------------------===//
-        Gfx801,
         Carrizo,
-        Gfx802,
         Iceland,
         Tonga,
-        Gfx803,
         Fiji,
         Polaris10,
         Polaris11,
-        Gfx810,
         Stoney,
 
-        //===----------------------------------------------------------------------===//
-        // GCN GFX9.
-        //===----------------------------------------------------------------------===//
-
-        Gfx900,
-        Gfx902,
-        Gfx904,
-        Gfx906,
-        Gfx909,
+        Gfx(u16),
     }
     impl FromStr for AmdGcn {
         type Err = ();
@@ -63,23 +51,20 @@ pub mod hsa {
             use self::AmdGcn::*;
 
             let v = match s {
-                "gfx801" => Gfx801,
                 "carrizo" => Carrizo,
-                "gfx802" => Gfx802,
                 "iceland" => Iceland,
                 "tonga" => Tonga,
-                "gfx803" => Gfx803,
                 "fiji" => Fiji,
                 "polaris10" => Polaris10,
                 "polaris11" => Polaris11,
-                "gfx810" => Gfx810,
                 "stoney" => Stoney,
 
-                "gfx900" => Gfx900,
-                "gfx902" => Gfx902,
-                "gfx904" => Gfx904,
-                "gfx906" => Gfx906,
-                "gfx909" => Gfx909,
+                _ if s.starts_with("gfx") => {
+                    let ver = &s[3..];
+                    let ver = u16::from_str(ver)
+                        .map_err(|_| () )?;
+                    Gfx(ver)
+                },
 
                 _ => { return Err(()); },
             };
